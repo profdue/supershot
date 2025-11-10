@@ -1,1 +1,222 @@
 
+team_key,league,last_5_xg_total,last_5_xga_total,form_trend,location
+Arsenal Home,Premier League,10.25,1.75,0.08,home
+Arsenal Away,Premier League,8.48,3.78,0.08,away
+Manchester City Home,Premier League,11.44,5.00,0.15,home
+Manchester City Away,Premier League,8.02,4.98,0.15,away
+Liverpool Home,Premier League,7.95,5.75,0.10,home
+Liverpool Away,Premier League,10.72,10.17,0.10,away
+Brighton Home,Premier League,8.55,5.87,0.03,home
+Brighton Away,Premier League,7.52,7.60,0.03,away
+Fulham Home,Premier League,6.73,5.49,0.04,home
+Fulham Away,Premier League,4.96,9.34,0.04,away
+Brentford Home,Premier League,9.06,7.18,-0.05,home
+Brentford Away,Premier League,7.88,5.85,-0.05,away
+Aston Villa Home,Premier League,5.47,6.82,0.10,home
+Aston Villa Away,Premier League,3.06,6.95,0.10,away
+Crystal Palace Home,Premier League,11.69,7.65,-0.08,home
+Crystal Palace Away,Premier League,8.50,6.04,-0.08,away
+Newcastle United Home,Premier League,10.48,4.95,0.03,home
+Newcastle United Away,Premier League,3.66,3.82,0.03,away
+Everton Home,Premier League,8.15,7.49,0.02,home
+Everton Away,Premier League,5.24,8.05,0.02,away
+Burnley Home,Premier League,3.50,9.59,-0.15,home
+Burnley Away,Premier League,4.62,13.54,-0.15,away
+Chelsea Home,Premier League,8.28,7.86,0.06,home
+Chelsea Away,Premier League,11.08,5.70,0.06,away
+Tottenham Home,Premier League,4.63,7.71,-0.02,home
+Tottenham Away,Premier League,6.77,5.23,-0.02,away
+Nottingham Forest Home,Premier League,7.50,8.98,-0.10,home
+Nottingham Forest Away,Premier League,3.10,9.60,-0.10,away
+West Ham Home,Premier League,3.91,11.79,-0.08,home
+West Ham Away,Premier League,4.93,7.63,-0.08,away
+Sunderland Home,Premier League,5.44,4.63,0.06,home
+Sunderland Away,Premier League,5.77,7.33,0.06,away
+Leeds Home,Premier League,8.81,3.23,0.02,home
+Leeds Away,Premier League,4.13,8.59,0.02,away
+Wolverhampton Wanderers Home,Premier League,5.98,7.73,0.01,home
+Wolverhampton Wanderers Away,Premier League,2.80,6.73,0.01,away
+Bournemouth Home,Premier League,5.77,2.30,0.12,home
+Bournemouth Away,Premier League,7.70,11.60,0.12,away
+Real Madrid Home,La Liga,15.97,4.09,0.11,home
+Real Madrid Away,La Liga,11.60,8.51,0.11,away
+Villarreal Home,La Liga,14.71,6.50,0.13,home
+Villarreal Away,La Liga,7.62,8.19,0.13,away
+Atletico Madrid Home,La Liga,16.16,4.99,0.09,home
+Atletico Madrid Away,La Liga,5.93,6.41,0.09,away
+FC Barcelona Home,La Liga,14.66,3.54,0.07,home
+FC Barcelona Away,La Liga,12.54,12.85,0.07,away
+Espanyol Home,La Liga,12.54,8.27,0.10,home
+Espanyol Away,La Liga,9.30,7.96,0.10,away
+Real Betis Home,La Liga,10.74,5.36,0.05,home
+Real Betis Away,La Liga,6.84,5.96,0.05,away
+Elche Home,La Liga,9.67,6.21,0.03,home
+Elche Away,La Liga,4.47,10.56,0.03,away
+Alaves Home,La Liga,9.58,4.62,-0.02,home
+Alaves Away,La Liga,4.72,6.18,-0.02,away
+Osasuna Home,La Liga,6.53,5.02,-0.04,home
+Osasuna Away,La Liga,5.72,10.51,-0.04,away
+Real Sociedad Home,La Liga,11.66,7.12,-0.03,home
+Real Sociedad Away,La Liga,7.14,9.11,-0.03,away
+Athletic Bilbao Home,La Liga,9.35,3.56,-0.01,home
+Athletic Bilbao Away,La Liga,4.54,7.26,-0.01,away
+Getafe Home,La Liga,4.29,6.55,-0.08,home
+Getafe Away,La Liga,5.66,7.14,-0.08,away
+Valencia Home,La Liga,7.50,5.93,-0.10,home
+Valencia Away,La Liga,4.56,12.84,-0.10,away
+Mallorca Home,La Liga,4.64,7.95,-0.06,home
+Mallorca Away,La Liga,6.14,13.16,-0.06,away
+Rayo Vallecano Home,La Liga,6.63,5.63,-0.12,home
+Rayo Vallecano Away,La Liga,10.65,13.26,-0.12,away
+Celta Vigo Home,La Liga,7.32,7.44,-0.14,home
+Celta Vigo Away,La Liga,6.49,9.57,-0.14,away
+Girona Home,La Liga,7.71,14.78,-0.18,home
+Girona Away,La Liga,5.65,10.63,-0.18,away
+Sevilla FC Home,La Liga,6.17,8.95,0.00,home
+Sevilla FC Away,La Liga,4.62,12.12,0.00,away
+Real Oviedo Home,La Liga,5.26,11.52,0.00,home
+Real Oviedo Away,La Liga,5.55,9.10,0.00,away
+Levante Home,La Liga,7.59,13.20,0.00,home
+Levante Away,La Liga,11.47,7.38,0.00,away
+Bayern Munich Home,Bundesliga,15.76,3.17,0.11,home
+Bayern Munich Away,Bundesliga,10.97,2.86,0.11,away
+RasenBallsport Leipzig Home,Bundesliga,9.98,4.73,0.13,home
+RasenBallsport Leipzig Away,Bundesliga,8.47,7.97,0.13,away
+VfB Stuttgart Home,Bundesliga,6.49,4.36,0.09,home
+VfB Stuttgart Away,Bundesliga,8.02,5.42,0.09,away
+Bayer Leverkusen Home,Bundesliga,11.14,4.34,0.07,home
+Bayer Leverkusen Away,Bundesliga,8.14,7.05,0.07,away
+Borussia Dortmund Home,Bundesliga,5.83,3.79,0.10,home
+Borussia Dortmund Away,Bundesliga,8.71,6.08,0.10,away
+Werder Bremen Home,Bundesliga,8.22,6.48,0.05,home
+Werder Bremen Away,Bundesliga,5.87,13.99,0.05,away
+Union Berlin Home,Bundesliga,8.03,8.05,0.03,home
+Union Berlin Away,Bundesliga,4.89,8.08,0.03,away
+FC Cologne Home,Bundesliga,7.32,5.45,-0.02,home
+FC Cologne Away,Bundesliga,6.78,10.43,-0.02,away
+Eintracht Frankfurt Home,Bundesliga,7.85,5.57,-0.03,home
+Eintracht Frankfurt Away,Bundesliga,8.40,7.69,-0.03,away
+Freiburg Home,Bundesliga,6.34,4.87,-0.01,home
+Freiburg Away,Bundesliga,5.69,7.40,-0.01,away
+FC Heidenheim Home,Bundesliga,6.78,9.13,-0.08,home
+FC Heidenheim Away,Bundesliga,4.80,10.15,-0.08,away
+Hoffenheim Home,Bundesliga,6.17,6.75,-0.06,home
+Hoffenheim Away,Bundesliga,9.62,7.67,-0.06,away
+FC Augsburg Home,Bundesliga,4.74,10.45,-0.12,home
+FC Augsburg Away,Bundesliga,3.98,6.54,-0.12,away
+Wolfsburg Home,Bundesliga,6.81,10.29,-0.14,home
+Wolfsburg Away,Bundesliga,6.15,7.88,-0.14,away
+Borussia M.Gladbach Home,Bundesliga,5.96,9.66,-0.18,home
+Borussia M.Gladbach Away,Bundesliga,7.16,5.21,-0.18,away
+Hamburger SV Home,Bundesliga,8.13,5.78,-0.04,home
+Hamburger SV Away,Bundesliga,4.44,10.63,-0.04,away
+Sankt Pauli Home,Bundesliga,5.91,9.74,-0.10,home
+Sankt Pauli Away,Bundesliga,4.34,7.74,-0.10,away
+FSV Mainz Home,Bundesliga,6.14,10.22,0.00,home
+FSV Mainz Away,Bundesliga,6.39,4.81,0.00,away
+Napoli Home,Serie A,6.75,7.10,0.11,home
+Napoli Away,Serie A,9.99,5.58,0.11,away
+AC Milan Home,Serie A,11.95,6.95,0.13,home
+AC Milan Away,Serie A,6.02,2.63,0.13,away
+Inter Home,Serie A,14.93,4.23,0.09,home
+Inter Away,Serie A,9.16,4.96,0.09,away
+Juventus Home,Serie A,9.23,4.88,0.10,home
+Juventus Away,Serie A,6.85,5.46,0.10,away
+Lazio Home,Serie A,7.58,6.74,0.05,home
+Lazio Away,Serie A,5.48,7.14,0.05,away
+Bologna Home,Serie A,7.34,2.14,0.03,home
+Bologna Away,Serie A,7.79,9.59,0.03,away
+AS Roma Home,Serie A,7.12,4.74,-0.02,home
+AS Roma Away,Serie A,7.62,7.16,-0.02,away
+Udinese Home,Serie A,6.56,3.93,-0.04,home
+Udinese Away,Serie A,5.69,9.80,-0.04,away
+Torino Home,Serie A,7.32,8.47,-0.03,home
+Torino Away,Serie A,5.26,6.87,-0.03,away
+Atalanta Home,Serie A,10.08,3.37,-0.01,home
+Atalanta Away,Serie A,5.65,5.58,-0.01,away
+Sassuolo Home,Serie A,6.09,7.70,-0.10,home
+Sassuolo Away,Serie A,5.40,8.98,-0.10,away
+Cagliari Home,Serie A,4.97,9.15,-0.14,home
+Cagliari Away,Serie A,5.97,8.48,-0.14,away
+Hellas Verona Home,Serie A,6.77,4.13,-0.18,home
+Hellas Verona Away,Serie A,6.11,8.64,-0.18,away
+Lecce Home,Serie A,5.41,7.63,0.00,home
+Lecce Away,Serie A,3.40,7.18,0.00,away
+Genoa Home,Serie A,6.20,7.28,0.00,home
+Genoa Away,Serie A,7.84,8.37,0.00,away
+Como Home,Serie A,7.72,5.97,0.07,home
+Como Away,Serie A,5.13,6.01,0.07,away
+Cremonese Home,Serie A,6.51,7.43,-0.08,home
+Cremonese Away,Serie A,4.52,12.87,-0.08,away
+Pisa Home,Serie A,5.32,7.07,-0.06,home
+Pisa Away,Serie A,6.70,10.13,-0.06,away
+Parma Home,Serie A,5.47,6.39,-0.12,home
+Parma Away,Serie A,4.91,8.06,-0.12,away
+Fiorentina Home,Serie A,8.20,9.08,0.00,home
+Fiorentina Away,Serie A,4.88,8.04,0.00,away
+Lens Home,Ligue 1,17.18,7.81,0.11,home
+Lens Away,Ligue 1,5.74,9.07,0.11,away
+Marseille Home,Ligue 1,13.74,3.51,0.13,home
+Marseille Away,Ligue 1,9.11,8.69,0.13,away
+Lille Home,Ligue 1,13.19,6.33,0.09,home
+Lille Away,Ligue 1,10.87,8.99,0.09,away
+Monaco Home,Ligue 1,14.38,7.01,0.07,home
+Monaco Away,Ligue 1,9.80,9.12,0.07,away
+Paris Saint Germain Home,Ligue 1,10.01,4.44,0.10,home
+Paris Saint Germain Away,Ligue 1,10.70,6.96,0.10,away
+Nice Home,Ligue 1,10.24,8.64,0.05,home
+Nice Away,Ligue 1,5.38,9.72,0.05,away
+Strasbourg Home,Ligue 1,12.73,3.93,0.03,home
+Strasbourg Away,Ligue 1,9.78,11.51,0.03,away
+Lyon Home,Ligue 1,10.28,4.24,-0.02,home
+Lyon Away,Ligue 1,8.26,9.12,-0.02,away
+Rennes Home,Ligue 1,11.65,9.97,-0.04,home
+Rennes Away,Ligue 1,7.09,13.52,-0.04,away
+Toulouse Home,Ligue 1,11.07,7.53,-0.03,home
+Toulouse Away,Ligue 1,5.19,9.05,-0.03,away
+Le Havre Home,Ligue 1,8.57,4.86,-0.01,home
+Le Havre Away,Ligue 1,4.30,9.56,-0.01,away
+Brest Home,Ligue 1,11.15,9.51,-0.12,home
+Brest Away,Ligue 1,4.99,8.39,-0.12,away
+Angers Home,Ligue 1,5.79,7.44,-0.08,home
+Angers Away,Ligue 1,4.41,14.13,-0.08,away
+Lorient Home,Ligue 1,8.48,7.53,-0.10,home
+Lorient Away,Ligue 1,8.14,12.92,-0.10,away
+Paris FC Home,Ligue 1,10.90,8.45,-0.06,home
+Paris FC Away,Ligue 1,6.87,10.93,-0.06,away
+Auxerre Home,Ligue 1,6.21,7.67,-0.14,home
+Auxerre Away,Ligue 1,6.44,11.24,-0.14,away
+Metz Home,Ligue 1,5.62,7.02,-0.18,home
+Metz Away,Ligue 1,6.54,16.91,-0.18,away
+Nantes Home,Ligue 1,7.17,12.13,0.00,home
+Nantes Away,Ligue 1,4.44,8.55,0.00,away
+CSKA Moscow Home,RFPL,14.39,7.32,0.11,home
+CSKA Moscow Away,RFPL,7.35,8.30,0.11,away
+Zenit St. Petersburg Home,RFPL,13.87,4.95,0.13,home
+Zenit St. Petersburg Away,RFPL,8.41,6.59,0.13,away
+FC Krasnodar Home,RFPL,13.37,7.15,0.09,home
+FC Krasnodar Away,RFPL,9.44,3.10,0.09,away
+Spartak Moscow Home,RFPL,10.73,6.13,0.07,home
+Spartak Moscow Away,RFPL,9.96,10.09,0.07,away
+Lokomotiv Moscow Home,RFPL,11.88,5.92,0.10,home
+Lokomotiv Moscow Away,RFPL,9.75,12.94,0.10,away
+Rubin Kazan Home,RFPL,8.50,7.24,0.05,home
+Rubin Kazan Away,RFPL,5.75,9.25,0.05,away
+Baltika Home,RFPL,8.76,4.39,0.03,home
+Baltika Away,RFPL,9.95,7.90,0.03,away
+Dinamo Moscow Home,RFPL,14.39,11.36,-0.03,home
+Dinamo Moscow Away,RFPL,8.72,6.44,-0.03,away
+Rostov Home,RFPL,8.61,6.68,-0.01,home
+Rostov Away,RFPL,6.45,7.47,-0.01,away
+Dynamo Makhachkala Home,RFPL,7.88,4.78,-0.02,home
+Dynamo Makhachkala Away,RFPL,5.29,7.79,-0.02,away
+FK Akhmat Home,RFPL,8.36,5.35,-0.04,home
+FK Akhmat Away,RFPL,9.43,13.90,-0.04,away
+FC Orenburg Home,RFPL,8.20,9.42,-0.10,home
+FC Orenburg Away,RFPL,7.61,10.75,-0.10,away
+Nizhny Novgorod Home,RFPL,8.22,8.82,-0.06,home
+Nizhny Novgorod Away,RFPL,3.56,12.30,-0.06,away
+Akron Home,RFPL,8.18,9.35,-0.12,home
+Akron Away,RFPL,7.89,11.22,-0.12,away
+PFC Sochi Home,RFPL,3.31,11.51,-0.14,home
+PFC Sochi Away,RFPL,5.75,13.51,-0.14,away
