@@ -56,7 +56,7 @@ class ProfessionalPredictionEngine:
                 'location': row['location']
             }
     
-    # PUBLIC METHODS FOR THE APP TO USE
+    # PUBLIC PROPERTIES FOR THE APP TO USE
     @property
     def injury_weights(self):
         """Expose injury weights to the app"""
@@ -67,6 +67,29 @@ class ProfessionalPredictionEngine:
         """Expose fatigue multipliers to the app"""
         return self.injury_analyzer.fatigue_multipliers
         
+    @property
+    def league_averages(self):
+        """Expose league averages to the app"""
+        return {
+            "Premier League": {"xg": 1.45, "xga": 1.45},
+            "La Liga": {"xg": 1.38, "xga": 1.38},
+            "Bundesliga": {"xg": 1.52, "xga": 1.52},
+            "Serie A": {"xg": 1.42, "xga": 1.42},
+            "Ligue 1": {"xg": 1.40, "xga": 1.40},
+            "RFPL": {"xg": 1.35, "xga": 1.35}
+        }
+        
+    @property
+    def value_thresholds(self):
+        """Expose value thresholds to the app"""
+        return self.value_calculator.value_thresholds
+        
+    @property
+    def confidence_weights(self):
+        """Expose confidence weights to the app"""
+        return self.confidence_calculator.confidence_weights
+
+    # PUBLIC METHODS FOR THE APP TO USE
     def get_team_data(self, team_key):
         """Get team data with fallback defaults"""
         default_data = {
@@ -127,14 +150,7 @@ class ProfessionalPredictionEngine:
     # YOUR ADVANCED PREDICTION LOGIC
     def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
         """ENHANCED: Calculate proper goal expectancy with FIXED normalization"""
-        league_avg = {
-            "Premier League": {"xg": 1.45, "xga": 1.45},
-            "La Liga": {"xg": 1.38, "xga": 1.38},
-            "Bundesliga": {"xg": 1.52, "xga": 1.52},
-            "Serie A": {"xg": 1.42, "xga": 1.42},
-            "Ligue 1": {"xg": 1.40, "xga": 1.40},
-            "RFPL": {"xg": 1.35, "xga": 1.35}
-        }.get(league, {"xg": 1.4, "xga": 1.4})
+        league_avg = self.league_averages.get(league, {"xg": 1.4, "xga": 1.4})
         
         # Get team-specific home advantage
         home_advantage_data = self.home_advantage.get_home_advantage(home_team)
