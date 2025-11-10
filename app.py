@@ -659,19 +659,30 @@ def display_enhanced_predictions(engine, result, inputs):
     home_base = engine.get_team_base_name(inputs['home_team'])
     away_base = engine.get_team_base_name(inputs['away_team'])
     
-    # Winner Prediction
+    # Winner Prediction with outcome-specific confidence
     st.markdown("#### 🏆 Match Winner")
     col1, col2, col3 = st.columns(3)
     
     winner_probs = result['enhanced_predictions']['winner']
-    winner_confidence = result['enhanced_predictions']['winner']['confidence']
+    
+    # Get outcome-specific confidences
+    if isinstance(result['confidence'], dict):
+        # New: outcome-specific confidence
+        home_confidence = result['confidence']['home_win']
+        draw_confidence = result['confidence']['draw']
+        away_confidence = result['confidence']['away_win']
+    else:
+        # Fallback: legacy single confidence
+        home_confidence = result['confidence']
+        draw_confidence = result['confidence']
+        away_confidence = result['confidence']
     
     with col1:
         st.markdown('<div class="prediction-card">', unsafe_allow_html=True)
         home_prob = winner_probs['home_win']
         home_color = "🟢" if home_prob > 0.50 else "🟡" if home_prob > 0.35 else "🔴"
         st.metric(f"{home_color} {home_base} Win", f"{home_prob:.1%}")
-        st.write(f"**Confidence:** {winner_confidence:.0f}%")
+        st.write(f"**Confidence:** {home_confidence:.0f}%")
         if home_prob > 0.45:
             st.write("**✅ FAVORED**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -681,7 +692,7 @@ def display_enhanced_predictions(engine, result, inputs):
         draw_prob = winner_probs['draw']
         draw_color = "🟢" if draw_prob > 0.30 else "🟡" if draw_prob > 0.25 else "🔴"
         st.metric(f"{draw_color} Draw", f"{draw_prob:.1%}")
-        st.write(f"**Confidence:** {winner_confidence:.0f}%")
+        st.write(f"**Confidence:** {draw_confidence:.0f}%")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col3:
@@ -689,7 +700,7 @@ def display_enhanced_predictions(engine, result, inputs):
         away_prob = winner_probs['away_win']
         away_color = "🟢" if away_prob > 0.50 else "🟡" if away_prob > 0.35 else "🔴"
         st.metric(f"{away_color} {away_base} Win", f"{away_prob:.1%}")
-        st.write(f"**Confidence:** {winner_confidence:.0f}%")
+        st.write(f"**Confidence:** {away_confidence:.0f}%")
         if away_prob > 0.45:
             st.write("**✅ FAVORED**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -831,14 +842,35 @@ def display_prediction_results(engine, result, inputs):
     st.markdown(f'<h1 style="font-size: 4rem; margin: 1rem 0;">{expected_home:.2f} - {expected_away:.2f}</h1>', unsafe_allow_html=True)
     st.markdown('<p style="font-size: 1.2rem;">Expected Final Score (Enhanced Poisson-based)</p>', unsafe_allow_html=True)
     
-    # Overall confidence
-    confidence = result['confidence']
-    confidence_stars = "★" * int((confidence - 40) / 8) + "☆" * (5 - int((confidence - 40) / 8))
-    confidence_text = "Low" if confidence < 55 else "Medium" if confidence < 65 else "High" if confidence < 75 else "Very High"
+    # ✅ FIXED: Overall confidence - handle both dictionary and number formats
+    confidence_data = result['confidence']
     
-    st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
-    st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Confidence: {confidence_stars} ({confidence:.0f}% - {confidence_text})</span>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    if isinstance(confidence_data, dict):
+        # New: outcome-specific confidence dictionary
+        confidence_values = list(confidence_data.values())
+        avg_confidence = sum(confidence_values) / len(confidence_values)
+        confidence_stars = "★" * int((avg_confidence - 40) / 8) + "☆" * (5 - int((avg_confidence - 40) / 8))
+        confidence_text = "Low" if avg_confidence < 55 else "Medium" if avg_confidence < 70 else "High"
+        
+        st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
+        st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Confidence: {confidence_stars} ({avg_confidence:.0f}% - {confidence_text})</span>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Show outcome-specific confidence breakdown
+        with st.expander("🔍 Outcome-Specific Confidence Breakdown"):
+            st.write(f"**🏠 {home_base} Win:** {confidence_data['home_win']:.0f}% confidence")
+            st.write(f"**🤝 Draw:** {confidence_data['draw']:.0f}% confidence") 
+            st.write(f"**✈️ {away_base} Win:** {confidence_data['away_win']:.0f}% confidence")
+            
+    else:
+        # Legacy: single confidence number
+        confidence = confidence_data
+        confidence_stars = "★" * int((confidence - 40) / 8) + "☆" * (5 - int((confidence - 40) / 8))
+        confidence_text = "Low" if confidence < 55 else "Medium" if confidence < 65 else "High" if confidence < 75 else "Very High"
+        
+        st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
+        st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Confidence: {confidence_stars} ({confidence:.0f}% - {confidence_text})</span>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Show confidence factors on hover/expand
     with st.expander("Confidence Breakdown"):
