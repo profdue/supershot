@@ -1,5 +1,4 @@
 import pandas as pd
-from .config import SQUAD_VALUE_TIERS
 
 class TeamQualityAnalyzer:
     def __init__(self, team_quality_df):
@@ -7,6 +6,12 @@ class TeamQualityAnalyzer:
         
     def get_team_quality(self, team_name):
         """Get quality metrics for a specific team"""
+        # Extract base name if needed
+        if " Home" in team_name:
+            team_name = team_name.replace(" Home", "")
+        elif " Away" in team_name:
+            team_name = team_name.replace(" Away", "")
+            
         team_data = self.team_quality_df[
             self.team_quality_df['team_base'] == team_name
         ]
