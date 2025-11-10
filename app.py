@@ -773,7 +773,7 @@ def display_enhanced_predictions(engine, result, inputs):
             st.write("**🚫 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Key Factors
+    # Key Factors - FIXED: Handle both string and number values
     st.markdown("---")
     st.markdown('<div class="section-header">🔍 Prediction Key Factors</div>', unsafe_allow_html=True)
     
@@ -782,13 +782,18 @@ def display_enhanced_predictions(engine, result, inputs):
         st.write("**🎯 Winner Prediction Factors:**")
         winner_factors = result['enhanced_predictions']['winner']['key_factors']
         for factor, value in winner_factors.items():
-            st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
+            # ✅ FIXED: Handle both string and number values
+            if isinstance(value, (int, float)):
+                st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
+            else:
+                st.write(f"- {factor.replace('_', ' ').title()}: {value}")
         
         # Over/Under factors
         st.write("**⚽ Over/Under Prediction Factors:**")
         ou_factors = result['enhanced_predictions']['over_under']['key_factors']
         for factor, value in ou_factors.items():
-            if isinstance(value, float):
+            # ✅ FIXED: Handle both string and number values
+            if isinstance(value, (int, float)):
                 st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
             else:
                 st.write(f"- {factor.replace('_', ' ').title()}: {value}")
@@ -797,7 +802,11 @@ def display_enhanced_predictions(engine, result, inputs):
         st.write("**🎪 BTTS Prediction Factors:**")
         btts_factors = result['enhanced_predictions']['btts']['key_factors']
         for factor, value in btts_factors.items():
-            st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
+            # ✅ FIXED: Handle both string and number values
+            if isinstance(value, (int, float)):
+                st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
+            else:
+                st.write(f"- {factor.replace('_', ' ').title()}: {value}")
 
 def display_prediction_results(engine, result, inputs):
     """ENHANCED: Display prediction results with integrated data"""
