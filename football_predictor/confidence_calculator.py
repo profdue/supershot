@@ -1,11 +1,16 @@
 import numpy as np
-from .config import CONFIDENCE_WEIGHTS
 
 class ConfidenceCalculator:
     def __init__(self, injury_analyzer, home_advantage_calculator):
         self.injury_analyzer = injury_analyzer
         self.home_advantage_calculator = home_advantage_calculator
-        self.confidence_weights = CONFIDENCE_WEIGHTS
+        self.confidence_weights = {
+            'data_quality': 0.18,
+            'predictability': 0.18, 
+            'injury_stability': 0.22,
+            'rest_balance': 0.12,
+            'home_advantage_consistency': 0.30
+        }
         
     def calculate_confidence(self, home_xg, away_xg, home_xga, away_xga, inputs):
         """ENHANCED: Calculate confidence with injury and home advantage factors"""
