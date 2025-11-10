@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy.stats import poisson
 from .data_loader import DataLoader
 from .team_quality import TeamQualityAnalyzer
 from .home_advantage import HomeAdvantageCalculator
@@ -7,7 +8,6 @@ from .injury_module import InjuryAnalyzer
 from .poisson_calculator import PoissonCalculator
 from .value_calculator import ValueCalculator
 from .confidence_calculator import ConfidenceCalculator
-from .config import LEAGUE_AVERAGES
 
 class ProfessionalPredictionEngine:
     def __init__(self, data_path="data"):
@@ -55,7 +55,8 @@ class ProfessionalPredictionEngine:
                 'form_trend': row['form_trend'],
                 'location': row['location']
             }
-        
+    
+    # PUBLIC METHODS FOR THE APP TO USE
     def get_team_data(self, team_key):
         """Get team data with fallback defaults"""
         default_data = {
@@ -94,6 +95,10 @@ class ProfessionalPredictionEngine:
             return team_name.replace(" Away", "")
         return team_name
         
+    def get_team_home_advantage(self, team_name):
+        """Get team-specific home advantage data"""
+        return self.home_advantage.get_home_advantage(team_name)
+        
     def validate_team_selection(self, home_team, away_team):
         """Validate that teams are from the same base team and league"""
         home_base = self.get_team_base_name(home_team)
@@ -108,10 +113,18 @@ class ProfessionalPredictionEngine:
             errors.append(f"Teams must be from the same league. {home_base} is in {home_league}, {away_base} is in {away_league}")
         
         return errors
-        
+
+    # YOUR ADVANCED PREDICTION LOGIC
     def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
         """ENHANCED: Calculate proper goal expectancy with FIXED normalization"""
-        league_avg = LEAGUE_AVERAGES.get(league, {"xg": 1.4, "xga": 1.4})
+        league_avg = {
+            "Premier League": {"xg": 1.45, "xga": 1.45},
+            "La Liga": {"xg": 1.38, "xga": 1.38},
+            "Bundesliga": {"xg": 1.52, "xga": 1.52},
+            "Serie A": {"xg": 1.42, "xga": 1.42},
+            "Ligue 1": {"xg": 1.40, "xga": 1.40},
+            "RFPL": {"xg": 1.35, "xga": 1.35}
+        }.get(league, {"xg": 1.4, "xga": 1.4})
         
         # Get team-specific home advantage
         home_advantage_data = self.home_advantage.get_home_advantage(home_team)
@@ -131,7 +144,7 @@ class ProfessionalPredictionEngine:
         away_goal_exp += away_penalty
         
         return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
-        
+
     def calculate_minimal_advantage(self, home_xg, home_xga, away_xg, away_xga):
         """MINIMAL advantage adjustment to prevent over-correction"""
         # Very small adjustment factor
@@ -147,7 +160,7 @@ class ProfessionalPredictionEngine:
         away_xga_adj = away_xga
         
         return home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj
-        
+
     def generate_insights(self, inputs, probabilities, home_xg, away_xg, home_xga, away_xga):
         """ENHANCED: Generate insights with home advantage and injury context"""
         insights = []
@@ -233,7 +246,7 @@ class ProfessionalPredictionEngine:
             insights.append(f"💰 **GOOD VALUE**: {', '.join(bet_names)} show positive EV")
         
         return insights
-        
+
     def predict_match(self, inputs):
         """ENHANCED MAIN PREDICTION FUNCTION with all improvements"""
         # Validate team selection
