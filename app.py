@@ -5,7 +5,7 @@ from scipy.stats import poisson
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import our professional engine
+# Import the simplified engine
 from football_predictor.engine import ProfessionalPredictionEngine
 
 # Clear cache to ensure fresh start
@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Your EXACT CSS styling
+# Your EXACT CSS styling (keep this exactly as you had it)
 st.markdown("""
 <style>
     .main-header {
@@ -337,7 +337,7 @@ def display_understat_input_form(engine):
         )
         home_data = engine.get_team_data(home_team)
         home_base = engine.get_team_base_name(home_team)
-        home_adv_data = engine.home_advantage.get_home_advantage(home_team)
+        home_adv_data = engine.get_team_home_advantage(home_team)
         
         # Display team info with home advantage indicator
         st.write(f"**Team:** {home_base} <span class='home-badge'>HOME</span>", unsafe_allow_html=True)
@@ -366,7 +366,7 @@ def display_understat_input_form(engine):
         )
         away_data = engine.get_team_data(away_team)
         away_base = engine.get_team_base_name(away_team)
-        away_adv_data = engine.home_advantage.get_home_advantage(away_team)
+        away_adv_data = engine.get_team_home_advantage(away_team)
         
         # Display team info with away performance indicator
         st.write(f"**Team:** {away_base} <span class='away-badge'>AWAY</span>", unsafe_allow_html=True)
@@ -490,19 +490,19 @@ def display_understat_input_form(engine):
         st.markdown('<div class="input-card">', unsafe_allow_html=True)
         st.subheader("🩹 Injury Status")
         
-        injury_options = list(engine.injury_analyzer.injury_weights.keys())
+        injury_options = list(engine.injury_weights.keys())
         
         home_injuries = st.selectbox(
             f"{home_base} Injuries",
             injury_options,
             index=injury_options.index(current_inputs['home_injuries']),
             key="home_injuries_input",
-            format_func=lambda x: f"{x}: {engine.injury_analyzer.injury_weights[x]['description']}"
+            format_func=lambda x: f"{x}: {engine.injury_weights[x]['description']}"
         )
         
         # Show injury impact preview
         if home_injuries != "None":
-            injury_data = engine.injury_analyzer.injury_weights[home_injuries]
+            injury_data = engine.injury_weights[home_injuries]
             attack_impact = (1 - injury_data['attack_mult']) * 100
             defense_impact = (1 - injury_data['defense_mult']) * 100
             injury_class = f"injury-{injury_data['impact_level'].lower()}"
@@ -513,12 +513,12 @@ def display_understat_input_form(engine):
             injury_options,
             index=injury_options.index(current_inputs['away_injuries']),
             key="away_injuries_input",
-            format_func=lambda x: f"{x}: {engine.injury_analyzer.injury_weights[x]['description']}"
+            format_func=lambda x: f"{x}: {engine.injury_weights[x]['description']}"
         )
         
         # Show injury impact preview
         if away_injuries != "None":
-            injury_data = engine.injury_analyzer.injury_weights[away_injuries]
+            injury_data = engine.injury_weights[away_injuries]
             attack_impact = (1 - injury_data['attack_mult']) * 100
             defense_impact = (1 - injury_data['defense_mult']) * 100
             injury_class = f"injury-{injury_data['impact_level'].lower()}"
