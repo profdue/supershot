@@ -1,5 +1,4 @@
 import pandas as pd
-from .config import HOME_ADVANTAGE_BASE
 
 class HomeAdvantageCalculator:
     def __init__(self, home_advantage_df):
@@ -15,7 +14,7 @@ class HomeAdvantageCalculator:
             print(f"⚠️ No home advantage data found for {team_key}")
             return {
                 'ppg_diff': 0.0,
-                'goals_boost': HOME_ADVANTAGE_BASE,
+                'goals_boost': 0.3 * 0.33,
                 'strength': 'moderate'
             }
             
