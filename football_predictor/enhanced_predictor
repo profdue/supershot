@@ -1,6 +1,5 @@
-# football_predictor/enhanced_predictor.py
 import numpy as np
-from scipy.stats import poisson, skellam
+from scipy.stats import poisson
 
 class EnhancedPredictor:
     def __init__(self, data_integrator):
