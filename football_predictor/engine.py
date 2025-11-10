@@ -1,264 +1,191 @@
-# football_predictor/engine.py
-import logging
+import pandas as pd
 import numpy as np
-from scipy.stats import poisson
-from typing import Dict, Any, Tuple, List
-
-from football_predictor.data_loader import DataLoader
-from football_predictor.team_quality import TeamQuality
-from .injury_module import InjuryModule
-from .home_advantage import HomeAdvantage
-from .config import LEAGUE_AVERAGES, FATIGUE_MULTIPLIERS
-
-logger = logging.getLogger(__name__)
+from .data_loader import DataLoader
+from .team_quality import TeamQualityAnalyzer
+from .home_advantage import HomeAdvantageCalculator
+from .injury_module import InjuryAnalyzer
+from .config import FORM_TREND_THRESHOLDS, LEAGUE_STRENGTH
 
 class ProfessionalPredictionEngine:
-    def __init__(self, data_dir: str = "data"):
-        self.data_loader = DataLoader(data_dir)
-        self.team_quality = TeamQuality(self.data_loader)
-        self.injury_module = InjuryModule(self.team_quality)
-        self.home_advantage = HomeAdvantage(self.data_loader, self.team_quality)
+    def __init__(self, data_path="data"):
+        self.data_loader = DataLoader(data_path)
+        self.data = None
+        self.team_quality = None
+        self.home_advantage = None
+        self.injury_analyzer = None
+        self._initialize_engine()
         
-        logger.info("Professional Prediction Engine initialized")
-    
-    def get_team_base_name(self, team_name: str) -> str:
-        """Extract base team name without Home/Away suffix"""
-        if " Home" in team_name:
-            return team_name.replace(" Home", "")
-        elif " Away" in team_name:
-            return team_name.replace(" Away", "")
-        return team_name
-    
-    def get_team_data(self, team_name: str) -> Dict[str, Any]:
-        """Get team data from database"""
-        return self.data_loader.get_team_data(team_name)
-    
-    def get_available_leagues(self) -> List[str]:
-        """Get list of available leagues"""
-        return self.data_loader.get_available_leagues()
-    
-    def get_teams_by_league(self, league: str, team_type: str = "all") -> List[str]:
-        """Get teams in a specific league"""
-        return self.data_loader.get_teams_by_league(league, team_type)
-    
-    def validate_team_selection(self, home_team: str, away_team: str) -> List[str]:
-        """Validate that teams are from the same base team and league"""
-        home_base = self.get_team_base_name(home_team)
-        away_base = self.get_team_base_name(away_team)
-        home_league = self.get_team_data(home_team)["league"]
-        away_league = self.get_team_data(away_team)["league"]
+    def _initialize_engine(self):
+        """Initialize all components of the prediction engine"""
+        print("🚀 Initializing Professional Prediction Engine...")
         
-        errors = []
-        if home_base == away_base:
-            errors.append("Cannot select the same team for both home and away")
-        if home_league != away_league:
-            errors.append(f"Teams must be from the same league. {home_base} is in {home_league}, {away_base} is in {away_league}")
+        # Load all data
+        self.data = self.data_loader.load_all_data()
         
-        return errors
-    
-    def apply_fatigue_modifiers(self, base_value: float, rest_days: int, form_trend: float) -> float:
-        """Apply fatigue and form modifiers"""
-        fatigue_mult = FATIGUE_MULTIPLIERS.get(rest_days, 1.0)
-        form_mult = 1 + (form_trend * 0.2)
-        return base_value * fatigue_mult * form_mult
-    
-    def calculate_goal_expectancy(self, home_xg: float, home_xga: float, 
-                                away_xg: float, away_xga: float, 
-                                home_team: str, away_team: str, 
-                                league: str) -> Tuple[float, float]:
-        """Calculate proper goal expectancy with opponent-quality aware home advantage"""
-        league_avg = LEAGUE_AVERAGES.get(league, {"xg": 1.4, "xga": 1.4})
+        if not self.data or any(v is None for v in self.data.values()):
+            raise Exception("Failed to load required data files")
+            
+        # Initialize analyzers
+        self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
+        self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
+        self.injury_analyzer = InjuryAnalyzer()
         
-        # Get quality-adjusted home advantage
-        home_boost, away_penalty = self.home_advantage.get_home_advantage_boost(home_team, away_team)
+        print("✅ Prediction engine initialized successfully!")
         
-        # Normalization
-        home_goal_exp = home_xg * (away_xga / league_avg["xga"]) ** 0.8
-        away_goal_exp = away_xg * (home_xga / league_avg["xga"]) ** 0.8
+    def get_team_performance_data(self, team_key):
+        """Get performance data for a specific team"""
+        team_data = self.data['teams'][
+            self.data['teams']['team_key'] == team_key
+        ]
         
-        # Apply quality-adjusted advantages
-        home_goal_exp += home_boost
-        away_goal_exp += away_penalty
+        if team_data.empty:
+            print(f"❌ No performance data found for {team_key}")
+            return None
+            
+        return {
+            'last_5_xg_total': team_data['last_5_xg_total'].iloc[0],
+            'last_5_xga_total': team_data['last_5_xga_total'].iloc[0],
+            'form_trend': team_data['form_trend'].iloc[0],
+            'location': team_data['location'].iloc[0],
+            'league': team_data['league'].iloc[0]
+        }
         
-        return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
-    
-    def calculate_poisson_probabilities(self, home_goal_exp: float, away_goal_exp: float) -> Dict[str, float]:
-        """Calculate probabilities using Poisson distribution"""
-        max_goals = 8
+    def calculate_form_impact(self, form_trend):
+        """Calculate form impact multiplier"""
+        if form_trend > FORM_TREND_THRESHOLDS["positive"]:
+            return 1.05  # Positive form boost
+        elif form_trend < FORM_TREND_THRESHOLDS["negative"]:
+            return 0.95  # Negative form penalty
+        else:
+            return 1.00  # Neutral form
+            
+    def calculate_league_strength(self, league):
+        """Apply league strength modifier"""
+        return LEAGUE_STRENGTH.get(league, 1.0)
         
-        home_probs = [poisson.pmf(i, home_goal_exp) for i in range(max_goals)]
-        away_probs = [poisson.pmf(i, away_goal_exp) for i in range(max_goals)]
+    def predict_match(self, home_team, away_team, home_injury="None", away_injury="None"):
+        """Main prediction function"""
+        print(f"🎯 Predicting: {home_team} vs {away_team}")
         
+        # Get performance data
+        home_data = self.get_team_performance_data(f"{home_team} Home")
+        away_data = self.get_team_performance_data(f"{away_team} Away")
+        
+        if not home_data or not away_data:
+            return {"error": "Could not load team data"}
+            
+        # Apply injury impacts
+        home_xg_for, home_xg_against = self.injury_analyzer.apply_injury_impact(
+            home_data['last_5_xg_total'], home_data['last_5_xga_total'], home_injury
+        )
+        away_xg_for, away_xg_against = self.injury_analyzer.apply_injury_impact(
+            away_data['last_5_xg_total'], away_data['last_5_xga_total'], away_injury
+        )
+        
+        # Calculate form impacts
+        home_form_mult = self.calculate_form_impact(home_data['form_trend'])
+        away_form_mult = self.calculate_form_impact(away_data['form_trend'])
+        
+        # Calculate quality difference
+        quality_diff = self.team_quality.calculate_quality_difference(home_team, away_team)
+        
+        # Calculate home advantage
+        home_boost = self.home_advantage.calculate_home_boost(
+            f"{home_team} Home", f"{away_team} Away"
+        )
+        
+        # Apply league strength
+        home_league_mult = self.calculate_league_strength(home_data['league'])
+        away_league_mult = self.calculate_league_strength(away_data['league'])
+        
+        # Calculate expected goals
+        home_expected_goals = (
+            (home_xg_for / 5) * home_form_mult * 
+            (1 + quality_diff * 0.1) * home_league_mult + home_boost
+        )
+        away_expected_goals = (
+            (away_xg_for / 5) * away_form_mult * 
+            (1 - quality_diff * 0.1) * away_league_mult
+        )
+        
+        # Adjust for defensive strength
+        home_defense = (home_xg_against / 5) * home_league_mult
+        away_defense = (away_xg_against / 5) * away_league_mult
+        
+        home_expected_goals -= away_defense * 0.2
+        away_expected_goals -= home_defense * 0.2
+        
+        # Ensure minimum values
+        home_expected_goals = max(home_expected_goals, 0.1)
+        away_expected_goals = max(away_expected_goals, 0.1)
+        
+        # Calculate win probabilities using Poisson distribution
+        home_win_prob, draw_prob, away_win_prob = self._calculate_poisson_probabilities(
+            home_expected_goals, away_expected_goals
+        )
+        
+        # Generate scoreline predictions
+        likely_scorelines = self._predict_scorelines(
+            home_expected_goals, away_expected_goals
+        )
+        
+        return {
+            'home_team': home_team,
+            'away_team': away_team,
+            'home_expected_goals': round(home_expected_goals, 2),
+            'away_expected_goals': round(away_expected_goals, 2),
+            'home_win_probability': round(home_win_prob, 3),
+            'draw_probability': round(draw_prob, 3),
+            'away_win_probability': round(away_win_prob, 3),
+            'home_injury_impact': home_injury,
+            'away_injury_impact': away_injury,
+            'likely_scorelines': likely_scorelines,
+            'home_advantage_boost': round(home_boost, 3),
+            'quality_difference': round(quality_diff, 3)
+        }
+        
+    def _calculate_poisson_probabilities(self, home_exp, away_exp):
+        """Calculate match probabilities using Poisson distribution"""
         home_win = 0
         draw = 0
         away_win = 0
         
-        for i in range(max_goals):
-            for j in range(max_goals):
-                prob = home_probs[i] * away_probs[j]
+        for i in range(8):  # Home goals
+            for j in range(8):  # Away goals
+                prob = (np.exp(-home_exp) * home_exp**i / np.math.factorial(i)) * \
+                       (np.exp(-away_exp) * away_exp**j / np.math.factorial(j))
+                
                 if i > j:
                     home_win += prob
                 elif i == j:
                     draw += prob
                 else:
                     away_win += prob
-        
-        # Normalize
+                    
+        # Normalize probabilities
         total = home_win + draw + away_win
-        home_win /= total
-        draw /= total
-        away_win /= total
+        if total > 0:
+            home_win /= total
+            draw /= total
+            away_win /= total
+            
+        return home_win, draw, away_win
         
-        # Over/under probabilities
-        total_goals_lambda = home_goal_exp + away_goal_exp
-        over_25 = 1 - sum(poisson.pmf(i, total_goals_lambda) for i in range(3))
+    def _predict_scorelines(self, home_exp, away_exp):
+        """Predict most likely scorelines"""
+        scorelines = []
         
-        return {
-            'home_win': home_win,
-            'draw': draw,
-            'away_win': away_win,
-            'over_2.5': over_25,
-            'under_2.5': 1 - over_25,
-            'expected_home_goals': home_goal_exp,
-            'expected_away_goals': away_goal_exp,
-            'total_goals_lambda': total_goals_lambda
-        }
-    
-    def predict_match(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Main prediction function with all enhancements"""
-        # Validate team selection
-        validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
-        if validation_errors:
-            return {'error': validation_errors}
+        for i in range(5):  # Home goals
+            for j in range(5):  # Away goals
+                prob = (np.exp(-home_exp) * home_exp**i / np.math.factorial(i)) * \
+                       (np.exp(-away_exp) * away_exp**j / np.math.factorial(j))
+                scorelines.append((f"{i}-{j}", prob))
+                
+        # Sort by probability and return top 3
+        scorelines.sort(key=lambda x: x[1], reverse=True)
+        return [scoreline[0] for scoreline in scorelines[:3]]
         
-        # Get league for normalization
-        league = self.get_team_data(inputs['home_team'])["league"]
-        
-        try:
-            # Calculate per-match averages
-            home_xg_per_match = inputs['home_xg_total'] / 5
-            home_xga_per_match = inputs['home_xga_total'] / 5
-            away_xg_per_match = inputs['away_xg_total'] / 5
-            away_xga_per_match = inputs['away_xga_total'] / 5
-            
-            # Apply injury modifiers with team quality scaling
-            home_xg_adj, home_xga_adj = self.injury_module.apply_injury_modifiers(
-                home_xg_per_match, home_xga_per_match,
-                inputs['home_injuries'], inputs['home_team']
-            )
-            
-            away_xg_adj, away_xga_adj = self.injury_module.apply_injury_modifiers(
-                away_xg_per_match, away_xga_per_match,
-                inputs['away_injuries'], inputs['away_team']
-            )
-            
-            # Apply fatigue and form modifiers
-            home_data = self.get_team_data(inputs['home_team'])
-            away_data = self.get_team_data(inputs['away_team'])
-            
-            home_xg_final = self.apply_fatigue_modifiers(
-                home_xg_adj, inputs['home_rest'], home_data['form_trend']
-            )
-            home_xga_final = self.apply_fatigue_modifiers(
-                home_xga_adj, inputs['home_rest'], home_data['form_trend']
-            )
-            away_xg_final = self.apply_fatigue_modifiers(
-                away_xg_adj, inputs['away_rest'], away_data['form_trend']
-            )
-            away_xga_final = self.apply_fatigue_modifiers(
-                away_xga_adj, inputs['away_rest'], away_data['form_trend']
-            )
-            
-            # Calculate goal expectancy
-            home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
-                home_xg_final, home_xga_final, away_xg_final, away_xga_final,
-                inputs['home_team'], inputs['away_team'], league
-            )
-            
-            # Calculate probabilities
-            probabilities = self.calculate_poisson_probabilities(home_goal_exp, away_goal_exp)
-            
-            # Calculate value bets
-            value_bets = self.calculate_value_bets(probabilities, {
-                'home': inputs['home_odds'],
-                'draw': inputs['draw_odds'], 
-                'away': inputs['away_odds'],
-                'over_2.5': inputs['over_odds']
-            })
-            
-            # Generate insights
-            insights = self.generate_insights(inputs, probabilities, 
-                                            home_xg_per_match, away_xg_per_match,
-                                            home_xga_per_match, away_xga_per_match)
-            
-            return {
-                'probabilities': probabilities,
-                'expected_goals': {'home': home_goal_exp, 'away': away_goal_exp},
-                'value_bets': value_bets,
-                'insights': insights,
-                'success': True
-            }
-            
-        except Exception as e:
-            logger.error(f"Prediction error: {e}")
-            return {'error': [f"Prediction failed: {str(e)}"]}
-    
-    def calculate_value_bets(self, probabilities: Dict[str, float], odds: Dict[str, float]) -> Dict[str, Any]:
-        """Calculate value bets for all markets"""
-        value_bets = {}
-        
-        for market, prob in [('home', probabilities['home_win']),
-                           ('draw', probabilities['draw']),
-                           ('away', probabilities['away_win']),
-                           ('over_2.5', probabilities['over_2.5'])]:
-            
-            if odds[market] <= 1.0:
-                value_bets[market] = {'rating': 'invalid', 'ev': -1}
-                continue
-            
-            ev = (prob * (odds[market] - 1)) - (1 - prob)
-            value_ratio = prob * odds[market]
-            
-            kelly_fraction = (prob * odds[market] - 1) / (odds[market] - 1) if prob * odds[market] > 1 else 0
-            
-            if ev > 0.08 and value_ratio > 1.12:
-                rating = "excellent"
-            elif ev > 0.04 and value_ratio > 1.06:
-                rating = "good"
-            elif ev > 0.01 and value_ratio > 1.02:
-                rating = "fair"
-            else:
-                rating = "poor"
-            
-            value_bets[market] = {
-                'ev': ev,
-                'kelly_fraction': max(0, kelly_fraction),
-                'value_ratio': value_ratio,
-                'rating': rating,
-                'implied_prob': 1 / odds[market],
-                'model_prob': prob
-            }
-        
-        return value_bets
-    
-    def generate_insights(self, inputs: Dict[str, Any], probabilities: Dict[str, float],
-                         home_xg: float, away_xg: float, home_xga: float, away_xga: float) -> List[str]:
-        """Generate match insights"""
-        insights = []
-        
-        home_base = self.get_team_base_name(inputs['home_team'])
-        away_base = self.get_team_base_name(inputs['away_team'])
-        
-        # Team quality insights
-        home_quality = self.team_quality.get_team_quality(inputs['home_team'])
-        away_quality = self.team_quality.get_team_quality(inputs['away_team'])
-        
-        quality_display = {
-            "elite": "🏆 ELITE", "strong": "💪 STRONG", 
-            "average": "⚖️ AVERAGE", "weak": "⚠️ WEAK"
-        }
-        insights.append(f"{quality_display[home_quality]} **{home_base}** vs {quality_display[away_quality]} **{away_base}**")
-        
-        # Add more insights as needed...
-        
-        return insights
+    def get_available_teams(self):
+        """Get list of available teams for selection"""
+        teams_df = self.data['team_quality']
+        return sorted(teams_df['team_base'].unique().tolist())
