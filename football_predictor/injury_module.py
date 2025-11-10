@@ -1,21 +1,29 @@
-from .config import INJURY_WEIGHTS
+from .config import INJURY_WEIGHTS, FATIGUE_MULTIPLIERS
 
 class InjuryAnalyzer:
     def __init__(self):
         self.injury_weights = INJURY_WEIGHTS
+        self.fatigue_multipliers = FATIGUE_MULTIPLIERS
         
-    def apply_injury_impact(self, xg_for, xg_against, injury_level):
-        """Apply injury impact to expected goals"""
-        if injury_level not in self.injury_weights:
-            print(f"⚠️ Unknown injury level: {injury_level}, using 'None'")
-            injury_level = "None"
-            
-        weights = self.injury_weights[injury_level]
+    def apply_injury_impact(self, xg_for, xg_against, injury_level, rest_days, form_trend):
+        """ENHANCED: Apply modifiers with improved injury impact"""
+        injury_data = self.injury_weights[injury_level]
         
-        adjusted_xg_for = xg_for * weights['attack_mult']
-        adjusted_xg_against = xg_against * weights['defense_mult']
+        # Apply injury impacts
+        attack_mult = injury_data["attack_mult"]
+        defense_mult = injury_data["defense_mult"]
         
-        return adjusted_xg_for, adjusted_xg_against
+        # Apply fatigue impact
+        fatigue_mult = self.fatigue_multipliers.get(rest_days, 1.0)
+        
+        # Apply form trend
+        form_mult = 1 + (form_trend * 0.2)
+        
+        # Apply all modifiers
+        xg_modified = xg_for * attack_mult * fatigue_mult * form_mult
+        xga_modified = xg_against * defense_mult * fatigue_mult * form_mult
+        
+        return max(0.1, xg_modified), max(0.1, xga_modified)
         
     def get_injury_description(self, injury_level):
         """Get description for injury level"""
@@ -40,3 +48,9 @@ class InjuryAnalyzer:
         )
         
         return (attack_diff + defense_diff) / 2
+        
+    def get_impact_level(self, injury_level):
+        """Get impact level for injury"""
+        if injury_level in self.injury_weights:
+            return self.injury_weights[injury_level]['impact_level']
+        return "None"
