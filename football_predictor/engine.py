@@ -35,7 +35,7 @@ class ProfessionalPredictionEngine:
         # Initialize analyzers
         self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
         self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
-        self.injury_analyzer = InjuryAnalyzer()
+        self.injury_analyzer = InjuryAnalyzer()  # Now with realistic injuries
         self.poisson_calculator = PoissonCalculator()
         self.value_calculator = ValueCalculator()
         self.confidence_calculator = ConfidenceCalculator(self.injury_analyzer, self.home_advantage)
@@ -147,9 +147,8 @@ class ProfessionalPredictionEngine:
         
         return errors
 
-    # YOUR ADVANCED PREDICTION LOGIC
     def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
-        """ENHANCED: Calculate proper goal expectancy with FIXED normalization"""
+        """Calculate proper goal expectancy with FIXED normalization"""
         league_avg = self.league_averages.get(league, {"xg": 1.4, "xga": 1.4})
         
         # Get team-specific home advantage
@@ -188,7 +187,7 @@ class ProfessionalPredictionEngine:
         return home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj
 
     def generate_insights(self, inputs, probabilities, home_xg, away_xg, home_xga, away_xga):
-        """ENHANCED: Generate insights with home advantage and injury context"""
+        """Generate insights with home advantage and REALISTIC injury context"""
         insights = []
         
         # Get base team names for display
@@ -215,19 +214,15 @@ class ProfessionalPredictionEngine:
         elif away_adv_strength == "weak":
             insights.append(f"✈️ **STRONG AWAY FORM**: {away_base} travels well ({away_adv_data['ppg_diff']:+.2f} PPG difference)")
         
-        # ENHANCED: Injury insights with impact levels
-        home_injury_data = self.injury_analyzer.injury_weights[inputs['home_injuries']]
-        away_injury_data = self.injury_analyzer.injury_weights[inputs['away_injuries']]
+        # REALISTIC: Injury insights with more subtle impacts
+        home_injury_summary = self.injury_analyzer.get_injury_impact_summary(inputs['home_injuries'])
+        away_injury_summary = self.injury_analyzer.get_injury_impact_summary(inputs['away_injuries'])
         
         if inputs['home_injuries'] != "None":
-            attack_reduction = (1-home_injury_data['attack_mult'])*100
-            defense_reduction = (1-home_injury_data['defense_mult'])*100
-            insights.append(f"🩹 **INJURY IMPACT**: {home_base} - {home_injury_data['description']} (Attack: -{attack_reduction:.0f}%, Defense: -{defense_reduction:.0f}%)")
+            insights.append(f"🩹 **INJURY IMPACT**: {home_base} - {home_injury_summary['description']} (Attack: -{home_injury_summary['attack_reduction']:.0f}%, Defense: -{home_injury_summary['defense_reduction']:.0f}%)")
         
         if inputs['away_injuries'] != "None":
-            attack_reduction = (1-away_injury_data['attack_mult'])*100
-            defense_reduction = (1-away_injury_data['defense_mult'])*100
-            insights.append(f"🩹 **INJURY IMPACT**: {away_base} - {away_injury_data['description']} (Attack: -{attack_reduction:.0f}%, Defense: -{defense_reduction:.0f}%)")
+            insights.append(f"🩹 **INJURY IMPACT**: {away_base} - {away_injury_summary['description']} (Attack: -{away_injury_summary['attack_reduction']:.0f}%, Defense: -{away_injury_summary['defense_reduction']:.0f}%)")
         
         # Rest insights
         rest_diff = inputs['home_rest'] - inputs['away_rest']
@@ -274,7 +269,7 @@ class ProfessionalPredictionEngine:
         return insights
 
     def predict_match(self, inputs):
-        """ENHANCED MAIN PREDICTION FUNCTION with all improvements"""
+        """MAIN PREDICTION FUNCTION with REALISTIC injury impacts"""
         # Validate team selection
         validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
         if validation_errors:
@@ -289,7 +284,7 @@ class ProfessionalPredictionEngine:
         away_xg_per_match = inputs['away_xg_total'] / 5
         away_xga_per_match = inputs['away_xga_total'] / 5
         
-        # Apply modifiers
+        # Apply REALISTIC modifiers
         home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
             home_xg_per_match, home_xga_per_match,
             inputs['home_injuries'], inputs['home_rest'],
@@ -307,7 +302,7 @@ class ProfessionalPredictionEngine:
             home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj
         )
         
-        # ENHANCED: Calculate proper goal expectancy with FIXED normalization
+        # Calculate proper goal expectancy with FIXED normalization
         home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
             home_xg_ba, home_xga_ba, away_xg_ba, away_xga_ba, 
             inputs['home_team'], inputs['away_team'], league
@@ -343,8 +338,8 @@ class ProfessionalPredictionEngine:
         # Store calculation details for transparency
         home_adv_data = self.home_advantage.get_home_advantage(inputs['home_team'])
         away_adv_data = self.home_advantage.get_home_advantage(inputs['away_team'])
-        home_injury_data = self.injury_analyzer.injury_weights[inputs['home_injuries']]
-        away_injury_data = self.injury_analyzer.injury_weights[inputs['away_injuries']]
+        home_injury_summary = self.injury_analyzer.get_injury_impact_summary(inputs['home_injuries'])
+        away_injury_summary = self.injury_analyzer.get_injury_impact_summary(inputs['away_injuries'])
         
         calculation_details = {
             'home_xg_raw': home_xg_per_match,
@@ -362,8 +357,9 @@ class ProfessionalPredictionEngine:
             'away_advantage_penalty': -away_adv_data['goals_boost'] * 0.5,
             'home_advantage_strength': home_adv_data['strength'],
             'away_advantage_strength': away_adv_data['strength'],
-            'home_injury_impact': f"{((1-home_injury_data['attack_mult'])*100):.1f}% attack, {((1-home_injury_data['defense_mult'])*100):.1f}% defense",
-            'away_injury_impact': f"{((1-away_injury_data['attack_mult'])*100):.1f}% attack, {((1-away_injury_data['defense_mult'])*100):.1f}% defense"
+            'home_injury_impact': f"{home_injury_summary['attack_reduction']:.1f}% attack, {home_injury_summary['defense_reduction']:.1f}% defense",
+            'away_injury_impact': f"{away_injury_summary['attack_reduction']:.1f}% attack, {away_injury_summary['defense_reduction']:.1f}% defense",
+            'injury_model_note': 'REALISTIC injury impacts (reduced from previous version)'
         }
         
         result = {
