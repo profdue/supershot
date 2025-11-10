@@ -1,8 +1,12 @@
 # football_predictor/__init__.py
-from .enhanced_predictor import EnhancedPredictor
+
+# Import the main engine class
 from .engine import ProfessionalPredictionEngine
 
+# Define what should be available when importing the package
 __all__ = [
-    'EnhancedPredictor',
     'ProfessionalPredictionEngine'
 ]
+
+# Note: EnhancedPredictor is used internally by ProfessionalPredictionEngine
+# and doesn't need to be exported publicly
