@@ -8,7 +8,14 @@ from .injury_module import InjuryAnalyzer
 from .poisson_calculator import PoissonCalculator
 from .value_calculator import ValueCalculator
 from .confidence_calculator import ConfidenceCalculator
-from .enhanced_predictor import EnhancedPredictor
+
+# Import EnhancedPredictor with error handling
+try:
+    from .enhanced_predictor import EnhancedPredictor
+    ENHANCED_PREDICTOR_AVAILABLE = True
+except ImportError:
+    ENHANCED_PREDICTOR_AVAILABLE = False
+    print("⚠️ EnhancedPredictor not available, using basic prediction methods")
 
 class DataIntegrator:
     def __init__(self, engine):
@@ -211,9 +218,14 @@ class ProfessionalPredictionEngine:
         self.poisson_calculator = PoissonCalculator()
         self.value_calculator = ValueCalculator()
         self.confidence_calculator = ConfidenceCalculator(self.injury_analyzer, self.home_advantage)
-        self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
         
-        print("✅ Prediction engine initialized with enhanced predictors!")
+        # Initialize enhanced predictor if available
+        if ENHANCED_PREDICTOR_AVAILABLE:
+            self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
+            print("✅ Prediction engine initialized with enhanced predictors!")
+        else:
+            self.enhanced_predictor = None
+            print("✅ Prediction engine initialized (basic mode)")
         
     def get_team_data(self, team_key):
         """Get comprehensive team data with all updates integrated"""
@@ -363,22 +375,60 @@ class ProfessionalPredictionEngine:
             away_data['form_trend']
         )
         
-        # Get enhanced predictions
-        winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
-            inputs['home_team'], inputs['away_team'],
-            home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,
-            inputs['home_injuries'], inputs['away_injuries']
-        )
-        
-        over_under_prediction = self.enhanced_predictor.predict_over_under_enhanced(
-            inputs['home_team'], inputs['away_team'],
-            home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
-        )
-        
-        btts_prediction = self.enhanced_predictor.predict_btts_enhanced(
-            inputs['home_team'], inputs['away_team'],
-            home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
-        )
+        # Use enhanced predictor if available, otherwise fall back to basic
+        if self.enhanced_predictor:
+            winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
+                inputs['home_team'], inputs['away_team'],
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,
+                inputs['home_injuries'], inputs['away_injuries']
+            )
+            
+            over_under_prediction = self.enhanced_predictor.predict_over_under_enhanced(
+                inputs['home_team'], inputs['away_team'],
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
+            )
+            
+            btts_prediction = self.enhanced_predictor.predict_btts_enhanced(
+                inputs['home_team'], inputs['away_team'],
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
+            )
+        else:
+            # Fall back to basic predictions
+            home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
+                home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj,
+                inputs['home_team'], inputs['away_team'], home_data['league']
+            )
+            
+            basic_probs = self.poisson_calculator.calculate_poisson_probabilities(home_goal_exp, away_goal_exp)
+            
+            winner_prediction = {
+                'home_win': basic_probs['home_win'],
+                'draw': basic_probs['draw'],
+                'away_win': basic_probs['away_win'],
+                'confidence': 60,
+                'expected_goals': {'home': home_goal_exp, 'away': away_goal_exp},
+                'key_factors': {'basic_mode': True}
+            }
+            
+            total_goals = home_goal_exp + away_goal_exp
+            over_under_prediction = {
+                'over_1.5': 1 - poisson.cdf(1.5, total_goals),
+                'over_2.5': 1 - poisson.cdf(2.5, total_goals),
+                'over_3.5': 1 - poisson.cdf(3.5, total_goals),
+                'under_1.5': poisson.cdf(1.5, total_goals),
+                'under_2.5': poisson.cdf(2.5, total_goals),
+                'under_3.5': poisson.cdf(3.5, total_goals),
+                'confidence': 55,
+                'key_factors': {'basic_mode': True}
+            }
+            
+            btts_prob = (1 - poisson.cdf(0, home_goal_exp)) * (1 - poisson.cdf(0, away_goal_exp))
+            btts_prediction = {
+                'btts_yes': btts_prob,
+                'btts_no': 1 - btts_prob,
+                'confidence': 50,
+                'key_factors': {'basic_mode': True}
+            }
         
         # Calculate value bets
         odds = {
@@ -408,7 +458,7 @@ class ProfessionalPredictionEngine:
         
         # Enhanced calculation details
         calculation_details = {
-            'enhanced_predictions_used': True,
+            'enhanced_predictions_used': self.enhanced_predictor is not None,
             'winner_confidence': winner_prediction['confidence'],
             'over_under_confidence': over_under_prediction['confidence'],
             'btts_confidence': btts_prediction['confidence'],
