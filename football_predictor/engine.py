@@ -57,6 +57,16 @@ class ProfessionalPredictionEngine:
             }
     
     # PUBLIC METHODS FOR THE APP TO USE
+    @property
+    def injury_weights(self):
+        """Expose injury weights to the app"""
+        return self.injury_analyzer.injury_weights
+        
+    @property
+    def fatigue_multipliers(self):
+        """Expose fatigue multipliers to the app"""
+        return self.injury_analyzer.fatigue_multipliers
+        
     def get_team_data(self, team_key):
         """Get team data with fallback defaults"""
         default_data = {
