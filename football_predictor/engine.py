@@ -4,8 +4,8 @@ import numpy as np
 from scipy.stats import poisson
 from typing import Dict, Any, Tuple, List
 
-from .data_loader import DataLoader
-from .team_quality import TeamQuality
+from football_predictor.data_loader import DataLoader
+from football_predictor.team_quality import TeamQuality
 from .injury_module import InjuryModule
 from .home_advantage import HomeAdvantage
 from .config import LEAGUE_AVERAGES, FATIGUE_MULTIPLIERS
