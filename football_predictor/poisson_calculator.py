@@ -28,9 +28,10 @@ class PoissonCalculator:
         
         # Normalize to account for truncated distribution
         total = home_win + draw + away_win
-        home_win /= total
-        draw /= total
-        away_win /= total
+        if total > 0:
+            home_win /= total
+            draw /= total
+            away_win /= total
         
         # Calculate over/under probabilities using combined goal expectancy
         total_goals_lambda = home_goal_exp + away_goal_exp
