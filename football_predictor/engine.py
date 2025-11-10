@@ -541,10 +541,9 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # Calculate overall confidence
-        confidence, confidence_factors = self.confidence_calculator.calculate_confidence(
-            home_xg_per_match, away_xg_per_match,
-            home_xga_per_match, away_xga_per_match, inputs
+        # ✅ FIXED: Use outcome-specific confidence calculation instead of single global confidence
+        outcome_confidences, confidence_factors = self.confidence_calculator.calculate_outcome_specific_confidence(
+            probabilities, home_data, away_data, inputs
         )
         
         # Enhanced calculation details
@@ -556,7 +555,8 @@ class ProfessionalPredictionEngine:
             'key_factors_winner': winner_prediction['key_factors'],
             'key_factors_over_under': over_under_prediction['key_factors'],
             'key_factors_btts': btts_prediction['key_factors'],
-            'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions'
+            'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions',
+            'outcome_specific_confidences': outcome_confidences  # Include the new confidence scores
         }
         
         # Combine all predictions
@@ -575,7 +575,7 @@ class ProfessionalPredictionEngine:
             'probabilities': combined_probabilities,
             'expected_goals': winner_prediction['expected_goals'],
             'value_bets': value_bets,
-            'confidence': confidence,
+            'confidence': outcome_confidences,  # ✅ FIXED: Now using outcome-specific confidences
             'confidence_factors': confidence_factors,
             'enhanced_predictions': {
                 'winner': winner_prediction,
@@ -588,8 +588,9 @@ class ProfessionalPredictionEngine:
                 'away': away_data
             },
             'calculation_details': calculation_details,
-            'reliability_score': min(95, confidence * 0.9),  # Enhanced predictions are more reliable
-            'reliability_level': 'High' if confidence > 70 else 'Moderate' if confidence > 55 else 'Low',
+            # Calculate overall reliability based on average confidence
+            'reliability_score': min(95, np.mean(list(outcome_confidences.values())) * 0.9),
+            'reliability_level': 'High' if np.mean(list(outcome_confidences.values())) > 70 else 'Moderate' if np.mean(list(outcome_confidences.values())) > 55 else 'Low',
             'reliability_advice': 'Enhanced predictions using all integrated data provide high reliability'
         }
         
