@@ -1,1 +1,116 @@
-
+team_base,elo,squad_value,structural_tier
+Arsenal,1920,950000000,elite
+Manchester City,1950,1100000000,elite
+Liverpool,1880,850000000,elite
+Chelsea,1750,800000000,strong
+Tottenham,1720,650000000,strong
+Newcastle United,1680,550000000,strong
+Manchester United,1700,750000000,strong
+Aston Villa,1650,450000000,average
+West Ham,1620,400000000,average
+Brighton,1580,350000000,average
+Fulham,1520,250000000,weak
+Burnley,1480,180000000,weak
+Crystal Palace,1600,320000000,average
+Brentford,1560,280000000,average
+Everton,1540,350000000,average
+Nottingham Forest,1500,220000000,weak
+Wolverhampton Wanderers,1550,300000000,average
+Bournemouth,1520,260000000,weak
+Sunderland,1450,150000000,weak
+Leeds,1580,320000000,average
+Real Madrid,1980,1000000000,elite
+FC Barcelona,1900,800000000,elite
+Atletico Madrid,1850,600000000,elite
+Villarreal,1720,350000000,strong
+Real Betis,1680,300000000,strong
+Real Sociedad,1700,320000000,strong
+Athletic Bilbao,1650,280000000,average
+Sevilla FC,1620,250000000,average
+Valencia,1600,220000000,average
+Girona,1580,180000000,average
+Getafe,1520,120000000,weak
+Osasuna,1540,140000000,weak
+Alaves,1500,100000000,weak
+Mallorca,1480,90000000,weak
+Celta Vigo,1560,160000000,average
+Rayo Vallecano,1520,110000000,weak
+Espanyol,1580,190000000,average
+Elche,1460,80000000,weak
+Real Oviedo,1440,60000000,weak
+Levante,1480,85000000,weak
+Bayern Munich,1950,900000000,elite
+Bayer Leverkusen,1850,550000000,elite
+Borussia Dortmund,1820,500000000,strong
+RB Leipzig,1800,450000000,strong
+VfB Stuttgart,1720,350000000,strong
+Eintracht Frankfurt,1680,280000000,average
+Freiburg,1650,220000000,average
+Hoffenheim,1620,180000000,average
+Werder Bremen,1580,150000000,average
+Wolfsburg,1600,200000000,average
+Borussia M.Gladbach,1640,240000000,average
+Union Berlin,1660,260000000,average
+FC Cologne,1560,140000000,weak
+FC Augsburg,1540,120000000,weak
+FC Heidenheim,1500,80000000,weak
+Hamburger SV,1520,100000000,weak
+Sankt Pauli,1480,70000000,weak
+FSV Mainz,1550,130000000,weak
+Inter,1880,600000000,elite
+AC Milan,1850,550000000,elite
+Juventus,1800,500000000,strong
+Napoli,1750,400000000,strong
+AS Roma,1720,350000000,strong
+Atalanta,1700,320000000,strong
+Lazio,1680,300000000,strong
+Fiorentina,1650,250000000,average
+Bologna,1620,200000000,average
+Torino,1580,180000000,average
+Monza,1520,120000000,weak
+Genoa,1540,140000000,weak
+Lecce,1480,80000000,weak
+Udinese,1560,160000000,average
+Sassuolo,1550,150000000,weak
+Cagliari,1500,90000000,weak
+Hellas Verona,1520,110000000,weak
+Como,1460,70000000,weak
+Cremonese,1440,60000000,weak
+Pisa,1420,50000000,weak
+Parma,1480,85000000,weak
+Paris Saint Germain,1900,900000000,elite
+Monaco,1700,350000000,strong
+Lyon,1680,300000000,strong
+Marseille,1650,250000000,average
+Lille,1660,280000000,average
+Nice,1640,240000000,average
+Lens,1620,220000000,average
+Rennes,1630,230000000,average
+Strasbourg,1560,160000000,weak
+Toulouse,1540,140000000,weak
+Brest,1520,120000000,weak
+Le Havre,1500,100000000,weak
+Nantes,1550,150000000,weak
+Lorient,1530,130000000,weak
+Montpellier,1510,110000000,weak
+Reims,1570,170000000,weak
+Metz,1490,90000000,weak
+Angers,1470,80000000,weak
+Auxerre,1480,85000000,weak
+Paris FC,1450,70000000,weak
+Zenit St. Petersburg,1780,300000000,strong
+CSKA Moscow,1720,250000000,strong
+Spartak Moscow,1700,220000000,strong
+Lokomotiv Moscow,1680,200000000,average
+Dinamo Moscow,1660,180000000,average
+Krasnodar,1650,170000000,average
+Rostov,1600,120000000,weak
+Rubin Kazan,1580,100000000,weak
+Akhmat Grozny,1560,90000000,weak
+Krylya Sovetov,1540,80000000,weak
+Orenburg,1500,60000000,weak
+Sochi,1520,70000000,weak
+Baltika,1480,50000000,weak
+Nizhny Novgorod,1460,40000000,weak
+Akron Tolyatti,1440,30000000,weak
+Dynamo Makhachkala,1420,25000000,weak
