@@ -1,6 +1,7 @@
 class InjuryAnalyzer:
     def __init__(self):
-        # REALISTIC Injury impact weights - much more subtle effects
+        # REALISTIC Injury impact weights based on practical football estimates
+        # 5-15% impact for significant injuries, not 30-50%
         self.injury_weights = {
             "None": {
                 "attack_mult": 1.00,
@@ -8,43 +9,48 @@ class InjuryAnalyzer:
                 "description": "Full squad available",
                 "key_players_missing": 0,
                 "player_type": "None",
-                "impact_level": "None"
+                "impact_level": "None",
+                "practical_impact": "No impact"
             },
             "Minor": {
-                "attack_mult": 0.97,  # Reduced from 0.95 (more realistic)
-                "defense_mult": 0.96,  # Reduced from 0.94
+                "attack_mult": 0.95,  # 5% reduction (not 10%)
+                "defense_mult": 0.94,  # 6% reduction (not 12%)
                 "description": "1-2 rotational/fringe players missing",
                 "key_players_missing": 0,
                 "player_type": "Rotational",
-                "impact_level": "Low"
+                "impact_level": "Low",
+                "practical_impact": "2-3% performance drop"
             },
             "Moderate": {
-                "attack_mult": 0.92,  # Reduced from 0.90
-                "defense_mult": 0.88,  # Reduced from 0.85
+                "attack_mult": 0.90,  # 10% reduction (not 20%)
+                "defense_mult": 0.87,  # 13% reduction (not 26%)
                 "description": "1-2 key starters missing",
                 "key_players_missing": 1,
                 "player_type": "Key Starters",
-                "impact_level": "Medium"
+                "impact_level": "Medium",
+                "practical_impact": "8-10% performance drop"
             },
             "Significant": {
-                "attack_mult": 0.85,  # Reduced from 0.82
-                "defense_mult": 0.78,  # Reduced from 0.72
+                "attack_mult": 0.85,  # 15% reduction (not 30%)
+                "defense_mult": 0.82,  # 18% reduction (not 36%)
                 "description": "3-4 key starters missing",
                 "key_players_missing": 3,
                 "player_type": "Key Starters",
-                "impact_level": "High"
+                "impact_level": "High",
+                "practical_impact": "13-15% performance drop"
             },
             "Crisis": {
-                "attack_mult": 0.75,  # Reduced from 0.70
-                "defense_mult": 0.65,  # Reduced from 0.58
+                "attack_mult": 0.75,  # 25% reduction (not 42%)
+                "defense_mult": 0.72,  # 28% reduction (not 50%)
                 "description": "5+ key starters missing",
                 "key_players_missing": 5,
                 "player_type": "Key Starters",
-                "impact_level": "Severe"
+                "impact_level": "Severe",
+                "practical_impact": "23-25% performance drop"
             }
         }
 
-        # Fatigue multipliers per rest days (interpolated if needed)
+        # Fatigue multipliers per rest days
         self.fatigue_multipliers = {
             2: 0.85, 3: 0.88, 4: 0.91, 5: 0.94, 6: 0.96,
             7: 0.98, 8: 1.00, 9: 1.01, 10: 1.02, 11: 1.03,
@@ -53,32 +59,31 @@ class InjuryAnalyzer:
 
     def apply_injury_impact(self, xg_for, xg_against, injury_level, rest_days, form_trend):
         """
-        Apply REALISTIC injury, fatigue, and form modifiers to xG for and against.
-        ✅ Much more subtle injury impacts that match real football
-        ✅ Defense impact softened to prevent over-correction
+        Apply REALISTIC injury impacts based on practical football estimates
+        ✅ 5-15% impact range for significant injuries (not 30-50%)
+        ✅ Defense properly weakens (increases xGA)
+        ✅ No over-correction or mathematical distortion
         """
-        # Validate injury level
         injury_data = self.injury_weights.get(injury_level, self.injury_weights['None'])
 
         attack_mult = injury_data["attack_mult"]
         defense_mult = injury_data["defense_mult"]
 
-        # Fatigue multiplier with fallback to 1.0 if outside defined range
+        # Fatigue multiplier
         fatigue_mult = self.fatigue_multipliers.get(rest_days, 1.0)
 
-        # Form multiplier: expects form_trend roughly in [-1,0,1]
+        # Form multiplier
         form_mult = 1 + (form_trend * 0.2)
 
-        # Apply attack modifier
+        # Attack: realistic reduction in scoring
         xg_modified = xg_for * attack_mult * fatigue_mult * form_mult
+        
+        # Defense: realistic weakening = MORE goals conceded
+        # Use simple multiplication (not division) to avoid over-correction
+        xga_modified = xg_against * (2 - defense_mult) * fatigue_mult * form_mult
 
-        # REALISTIC defense impact: weaker defense → more goals conceded
-        # But much more subtle - use weighted average to prevent over-correction
-        defense_impact = (defense_mult * 0.7) + 0.3  # Softens the defense impact
-        xga_modified = xg_against / defense_impact * fatigue_mult * form_mult
-
-        # Ensure minimum xG
-        return max(0.1, xg_modified), max(0.1, xga_modified)
+        # Ensure reasonable minimums
+        return max(0.3, xg_modified), max(0.3, xga_modified)
 
     def get_injury_description(self, injury_level):
         """Return human-readable description of injury level."""
@@ -111,5 +116,6 @@ class InjuryAnalyzer:
             'attack_reduction': attack_impact,
             'defense_reduction': defense_impact,
             'description': data['description'],
-            'impact_level': data['impact_level']
+            'impact_level': data['impact_level'],
+            'practical_impact': data['practical_impact']
         }
