@@ -108,7 +108,7 @@ CONFIDENCE_WEIGHTS = {
     'home_advantage_consistency': 0.30
 }
 
-# Squad value tiers (in euros) - ADDED THIS
+# Squad value tiers (in euros)
 SQUAD_VALUE_TIERS = {
     "elite": 500000000,      # 500M+
     "strong": 200000000,     # 200-500M
