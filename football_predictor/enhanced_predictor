@@ -1,0 +1,320 @@
+# football_predictor/enhanced_predictor.py
+import numpy as np
+from scipy.stats import poisson, skellam
+
+class EnhancedPredictor:
+    def __init__(self, data_integrator):
+        self.data_integrator = data_integrator
+        
+    def predict_winner_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries):
+        """Enhanced winner prediction using all integrated data"""
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        
+        # Base Poisson probabilities
+        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
+            home_team, away_team, home_xg, away_xg, home_xga, away_xga
+        )
+        
+        # Adjust for team quality difference
+        quality_factor = self._calculate_quality_factor(home_data, away_data)
+        
+        # Adjust for form trends
+        form_factor = self._calculate_form_factor(home_data, away_data)
+        
+        # Adjust for home advantage (already in goal expectancy, but add extra weight)
+        home_advantage_boost = home_data['home_advantage']['goals_boost'] * 0.3
+        
+        # Calculate enhanced probabilities
+        home_win_prob, draw_prob, away_win_prob = self._calculate_enhanced_poisson_probabilities(
+            home_goal_exp + home_advantage_boost, 
+            away_goal_exp,
+            quality_factor,
+            form_factor
+        )
+        
+        # Apply injury impacts
+        injury_adjustment = self._calculate_injury_adjustment(home_injuries, away_injuries)
+        home_win_prob *= injury_adjustment['home_attack']
+        away_win_prob *= injury_adjustment['away_attack']
+        
+        # Normalize probabilities
+        total = home_win_prob + draw_prob + away_win_prob
+        home_win_prob /= total
+        draw_prob /= total
+        away_win_prob /= total
+        
+        # Determine confidence level
+        confidence = self._calculate_winner_confidence(home_win_prob, draw_prob, away_win_prob, home_data, away_data)
+        
+        return {
+            'home_win': home_win_prob,
+            'draw': draw_prob,
+            'away_win': away_win_prob,
+            'confidence': confidence,
+            'expected_goals': {'home': home_goal_exp, 'away': away_goal_exp},
+            'key_factors': {
+                'quality_difference': quality_factor,
+                'form_difference': form_factor,
+                'home_advantage': home_advantage_boost
+            }
+        }
+    
+    def predict_over_under_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
+        """Enhanced over/under prediction using BTTS and clean sheet data"""
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        
+        # Base goal expectancy
+        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
+            home_team, away_team, home_xg, away_xg, home_xga, away_xga
+        )
+        
+        total_goals_lambda = home_goal_exp + away_goal_exp
+        
+        # Use BTTS and clean sheet data to refine probabilities
+        btts_probability = self._calculate_btts_probability(home_data, away_data, home_goal_exp, away_goal_exp)
+        clean_sheet_prob_home = home_data['clean_sheet_pct'] / 100
+        clean_sheet_prob_away = away_data['clean_sheet_pct'] / 100
+        
+        # Enhanced over/under calculations
+        over_25_prob = self._calculate_enhanced_over_under(total_goals_lambda, 2.5, btts_probability)
+        under_25_prob = 1 - over_25_prob
+        
+        # Additional thresholds
+        over_15_prob = self._calculate_enhanced_over_under(total_goals_lambda, 1.5, btts_probability)
+        over_35_prob = self._calculate_enhanced_over_under(total_goals_lambda, 3.5, btts_probability)
+        
+        confidence = self._calculate_over_under_confidence(total_goals_lambda, home_data, away_data)
+        
+        return {
+            'over_1.5': over_15_prob,
+            'over_2.5': over_25_prob,
+            'over_3.5': over_35_prob,
+            'under_1.5': 1 - over_15_prob,
+            'under_2.5': under_25_prob,
+            'under_3.5': 1 - over_35_prob,
+            'btts_probability': btts_probability,
+            'expected_total_goals': total_goals_lambda,
+            'confidence': confidence,
+            'key_factors': {
+                'btts_likelihood': btts_probability,
+                'clean_sheet_home': clean_sheet_prob_home,
+                'clean_sheet_away': clean_sheet_prob_away
+            }
+        }
+    
+    def predict_btts_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
+        """Enhanced Both Teams To Score prediction"""
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        
+        # Historical BTTS percentages
+        home_btts_historical = home_data['btts_pct'] / 100
+        away_btts_historical = away_data['btts_pct'] / 100
+        
+        # Defensive strength factors
+        home_defense_strength = home_data['defense_strength']
+        away_defense_strength = away_data['defense_strength']
+        
+        # Calculate probability using multiple factors
+        base_prob = (home_btts_historical + away_btts_historical) / 2
+        
+        # Adjust for current form and expected goals
+        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
+            home_team, away_team, home_xg, away_xg, home_xga, away_xga
+        )
+        
+        # Higher expected goals increase BTTS probability
+        goals_factor = min(1.0, (home_goal_exp + away_goal_exp) / 3.0)
+        
+        # Weaker defenses increase BTTS probability
+        defense_factor = (2 - home_defense_strength - away_defense_strength) / 2
+        
+        # Enhanced BTTS probability
+        btts_prob = base_prob * 0.6 + goals_factor * 0.3 + defense_factor * 0.1
+        
+        # Ensure reasonable bounds
+        btts_prob = max(0.1, min(0.9, btts_prob))
+        no_btts_prob = 1 - btts_prob
+        
+        confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
+        
+        return {
+            'btts_yes': btts_prob,
+            'btts_no': no_btts_prob,
+            'confidence': confidence,
+            'key_factors': {
+                'historical_btts': base_prob,
+                'goals_expectancy': goals_factor,
+                'defensive_weakness': defense_factor
+            }
+        }
+    
+    def _calculate_enhanced_goal_expectancy(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
+        """Calculate goal expectancy using all integrated data"""
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        
+        league_avg_xg = self.data_integrator._get_league_avg_xg(home_data['league'])
+        
+        # Enhanced normalization with team strengths
+        home_attack_strength = home_data['attack_strength']
+        away_defense_strength = away_data['defense_strength']
+        
+        away_attack_strength = away_data['attack_strength']
+        home_defense_strength = home_data['defense_strength']
+        
+        home_goal_exp = home_xg * (away_xga / league_avg_xg) ** 0.7 * home_attack_strength
+        away_goal_exp = away_xg * (home_xga / league_avg_xg) ** 0.7 * away_attack_strength
+        
+        # Apply home advantage
+        home_advantage = home_data['home_advantage']['goals_boost']
+        home_goal_exp += home_advantage
+        away_goal_exp -= home_advantage * 0.3  # Smaller penalty for away team
+        
+        return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
+    
+    def _calculate_quality_factor(self, home_data, away_data):
+        """Calculate quality difference factor"""
+        home_elo = home_data['base_quality']['elo']
+        away_elo = away_data['base_quality']['elo']
+        
+        elo_diff = home_elo - away_elo
+        # Convert ELO difference to probability adjustment (0.9 to 1.1)
+        return 1.0 + (elo_diff / 1000) * 0.1
+    
+    def _calculate_form_factor(self, home_data, away_data):
+        """Calculate form difference factor"""
+        home_form = home_data['form_trend']
+        away_form = away_data['form_trend']
+        
+        form_diff = home_form - away_form
+        # Convert form difference to probability adjustment
+        return 1.0 + form_diff * 2
+    
+    def _calculate_injury_adjustment(self, home_injuries, away_injuries):
+        """Calculate injury impact adjustments"""
+        injury_weights = {
+            "None": {"attack_mult": 1.00, "defense_mult": 1.00},
+            "Minor": {"attack_mult": 0.95, "defense_mult": 0.94},
+            "Moderate": {"attack_mult": 0.90, "defense_mult": 0.85},
+            "Significant": {"attack_mult": 0.82, "defense_mult": 0.72},
+            "Crisis": {"attack_mult": 0.70, "defense_mult": 0.58}
+        }
+        
+        home_adj = injury_weights.get(home_injuries, injury_weights["None"])
+        away_adj = injury_weights.get(away_injuries, injury_weights["None"])
+        
+        return {
+            'home_attack': home_adj['attack_mult'],
+            'home_defense': home_adj['defense_mult'],
+            'away_attack': away_adj['attack_mult'],
+            'away_defense': away_adj['defense_mult']
+        }
+    
+    def _calculate_enhanced_poisson_probabilities(self, home_lambda, away_lambda, quality_factor, form_factor):
+        """Calculate Poisson probabilities with enhancements"""
+        home_win = 0
+        draw = 0
+        away_win = 0
+        
+        # Adjust lambdas for quality and form
+        home_lambda_adj = home_lambda * quality_factor * form_factor
+        away_lambda_adj = away_lambda / quality_factor / form_factor
+        
+        # Calculate probabilities for reasonable goal ranges
+        for i in range(0, 8):  # home goals
+            for j in range(0, 8):  # away goals
+                prob = poisson.pmf(i, home_lambda_adj) * poisson.pmf(j, away_lambda_adj)
+                if i > j:
+                    home_win += prob
+                elif i == j:
+                    draw += prob
+                else:
+                    away_win += prob
+        
+        return home_win, draw, away_win
+    
+    def _calculate_btts_probability(self, home_data, away_data, home_goal_exp, away_goal_exp):
+        """Calculate BTTS probability using multiple factors"""
+        # Historical average
+        historical_btts = (home_data['btts_pct'] + away_data['btts_pct']) / 200
+        
+        # Probability both teams score at least one goal
+        prob_home_scores = 1 - poisson.cdf(0, home_goal_exp)
+        prob_away_scores = 1 - poisson.cdf(0, away_goal_exp)
+        
+        poisson_btts = prob_home_scores * prob_away_scores
+        
+        # Combine historical and Poisson approaches
+        btts_prob = historical_btts * 0.6 + poisson_btts * 0.4
+        
+        return max(0.05, min(0.95, btts_prob))
+    
+    def _calculate_enhanced_over_under(self, total_lambda, threshold, btts_probability):
+        """Calculate over/under probabilities with BTTS adjustment"""
+        # Base Poisson probability
+        poisson_prob = 1 - poisson.cdf(threshold, total_lambda)
+        
+        # Adjust based on BTTS likelihood (higher BTTS probability suggests more goals)
+        btts_adjustment = 1.0 + (btts_probability - 0.5) * 0.3
+        
+        enhanced_prob = poisson_prob * btts_adjustment
+        
+        return max(0.05, min(0.95, enhanced_prob))
+    
+    def _calculate_winner_confidence(self, home_win, draw, away_win, home_data, away_data):
+        """Calculate confidence in winner prediction"""
+        max_prob = max(home_win, draw, away_win)
+        
+        # Base confidence from probability difference
+        if max_prob > 0.6:
+            base_confidence = 80 + (max_prob - 0.6) * 100
+        elif max_prob > 0.45:
+            base_confidence = 60 + (max_prob - 0.45) * 133
+        else:
+            base_confidence = 40 + max_prob * 44
+        
+        # Adjust for data quality
+        data_quality = min(home_data['matches_played'], away_data['matches_played']) / 5
+        data_adjustment = min(1.0, data_quality) * 10
+        
+        return min(95, base_confidence + data_adjustment)
+    
+    def _calculate_over_under_confidence(self, total_goals, home_data, away_data):
+        """Calculate confidence in over/under prediction"""
+        # Confidence based on how far from 2.5 goals
+        distance_from_threshold = abs(total_goals - 2.5)
+        
+        if distance_from_threshold > 1.0:
+            confidence = 80
+        elif distance_from_threshold > 0.5:
+            confidence = 70
+        elif distance_from_threshold > 0.25:
+            confidence = 60
+        else:
+            confidence = 50
+        
+        # Adjust for defensive/offensive consistency
+        home_consistency = home_data['clean_sheet_pct'] / 100
+        away_consistency = away_data['clean_sheet_pct'] / 100
+        consistency_adjustment = (home_consistency + away_consistency) * 10
+        
+        return min(95, confidence + consistency_adjustment)
+    
+    def _calculate_btts_confidence(self, home_data, away_data, home_goal_exp, away_goal_exp):
+        """Calculate confidence in BTTS prediction"""
+        # Confidence based on historical consistency
+        home_btts_consistency = abs(home_data['btts_pct'] - 50) / 50  # How far from 50%
+        away_btts_consistency = abs(away_data['btts_pct'] - 50) / 50
+        
+        consistency_score = 1 - (home_btts_consistency + away_btts_consistency) / 2
+        
+        # Confidence based on expected goals
+        prob_both_score = (1 - poisson.cdf(0, home_goal_exp)) * (1 - poisson.cdf(0, away_goal_exp))
+        goals_confidence = abs(prob_both_score - 0.5) * 2  # How far from 50/50
+        
+        base_confidence = (consistency_score * 0.6 + goals_confidence * 0.4) * 100
+        
+        return min(95, base_confidence)
