@@ -1,71 +1,49 @@
-# football_predictor/team_quality.py
-import logging
-from typing import Dict, Any
+import pandas as pd
+from .config import SQUAD_VALUE_TIERS
 
-logger = logging.getLogger(__name__)
-
-class TeamQuality:
-    def __init__(self, data_loader):
-        self.data_loader = data_loader
-    
-    def get_team_quality(self, team_name: str, current_ppg: float = None) -> str:
-        """Hybrid structural + dynamic team quality classification"""
-        base_team = self._get_team_base_name(team_name)
+class TeamQualityAnalyzer:
+    def __init__(self, team_quality_df):
+        self.team_quality_df = team_quality_df
         
-        try:
-            quality_data = self.data_loader.get_team_quality_data(base_team)
+    def get_team_quality(self, team_name):
+        """Get quality metrics for a specific team"""
+        team_data = self.team_quality_df[
+            self.team_quality_df['team_base'] == team_name
+        ]
+        
+        if team_data.empty:
+            print(f"⚠️ No quality data found for {team_name}")
+            return None
             
-            # Use provided PPG or default based on structural tier
-            if current_ppg is None:
-                current_ppg = self._get_default_ppg(quality_data['structural_tier'])
-            
-            # Hybrid scoring
-            structural_score = self._calculate_structural_score(quality_data, current_ppg)
-            
-            # Classification
-            return self._classify_quality(structural_score)
-            
-        except Exception as e:
-            logger.error(f"Error calculating quality for {team_name}: {e}")
-            return "average"
-    
-    def _get_team_base_name(self, team_name: str) -> str:
-        """Extract base team name without Home/Away suffix"""
-        if " Home" in team_name:
-            return team_name.replace(" Home", "")
-        elif " Away" in team_name:
-            return team_name.replace(" Away", "")
-        return team_name
-    
-    def _get_default_ppg(self, structural_tier: str) -> float:
-        """Get default PPG based on structural tier"""
         return {
-            "elite": 2.0, 
-            "strong": 1.7, 
-            "average": 1.3, 
-            "weak": 0.8
-        }[structural_tier]
-    
-    def _calculate_structural_score(self, quality_data: Dict[str, Any], current_ppg: float) -> float:
-        """Calculate hybrid structural score"""
-        return (
-            (quality_data['elo'] / 2000) * 0.4 +
-            (quality_data['squad_value'] / 1000000000) * 0.4 +
-            (current_ppg / 2.5) * 0.2
+            'elo': team_data['elo'].iloc[0],
+            'squad_value': team_data['squad_value'].iloc[0],
+            'structural_tier': team_data['structural_tier'].iloc[0]
+        }
+        
+    def calculate_quality_difference(self, team1, team2):
+        """Calculate quality difference between two teams"""
+        qual1 = self.get_team_quality(team1)
+        qual2 = self.get_team_quality(team2)
+        
+        if not qual1 or not qual2:
+            return 0
+            
+        # Elo difference (normalized)
+        elo_diff = (qual1['elo'] - qual2['elo']) / 100
+        
+        # Squad value difference (log scale)
+        val_diff = (
+            (qual1['squad_value'] - qual2['squad_value']) / 
+            max(qual1['squad_value'], qual2['squad_value'])
         )
-    
-    def _classify_quality(self, structural_score: float) -> str:
-        """Classify team into quality tier"""
-        if structural_score >= 0.85:
-            return "elite"
-        elif structural_score >= 0.70:
-            return "strong"
-        elif structural_score >= 0.55:
-            return "average"
-        else:
-            return "weak"
-    
-    def get_quality_scaling_factor(self, quality: str) -> float:
-        """Get injury scaling factor based on team quality"""
-        from .config import QUALITY_SCALING
-        return QUALITY_SCALING.get(quality, 1.0)
+        
+        # Combined quality difference
+        quality_diff = (elo_diff * 0.7) + (val_diff * 0.3)
+        
+        return quality_diff
+        
+    def get_structural_tier(self, team_name):
+        """Get structural tier for a team"""
+        qual = self.get_team_quality(team_name)
+        return qual['structural_tier'] if qual else 'average'
