@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy.stats import poisson
 from .data_loader import DataLoader
 from .team_quality import TeamQualityAnalyzer
 from .home_advantage import HomeAdvantageCalculator
@@ -94,6 +95,10 @@ class ProfessionalPredictionEngine:
             return team_name.replace(" Away", "")
         return team_name
         
+    def get_team_home_advantage(self, team_name):
+        """Get team-specific home advantage data"""
+        return self.home_advantage.get_home_advantage(team_name)
+        
     def validate_team_selection(self, home_team, away_team):
         """Validate that teams are from the same base team and league"""
         home_base = self.get_team_base_name(home_team)
@@ -108,7 +113,7 @@ class ProfessionalPredictionEngine:
             errors.append(f"Teams must be from the same league. {home_base} is in {home_league}, {away_base} is in {away_league}")
         
         return errors
-        
+
     def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
         """ENHANCED: Calculate proper goal expectancy with FIXED normalization"""
         league_avg = LEAGUE_AVERAGES.get(league, {"xg": 1.4, "xga": 1.4})
