@@ -4,7 +4,10 @@ from .data_loader import DataLoader
 from .team_quality import TeamQualityAnalyzer
 from .home_advantage import HomeAdvantageCalculator
 from .injury_module import InjuryAnalyzer
-from .config import FORM_TREND_THRESHOLDS, LEAGUE_STRENGTH
+from .poisson_calculator import PoissonCalculator
+from .value_calculator import ValueCalculator
+from .confidence_calculator import ConfidenceCalculator
+from .config import LEAGUE_AVERAGES
 
 class ProfessionalPredictionEngine:
     def __init__(self, data_path="data"):
@@ -13,6 +16,10 @@ class ProfessionalPredictionEngine:
         self.team_quality = None
         self.home_advantage = None
         self.injury_analyzer = None
+        self.poisson_calculator = None
+        self.value_calculator = None
+        self.confidence_calculator = None
+        self.team_database = {}
         self._initialize_engine()
         
     def _initialize_engine(self):
@@ -29,163 +36,321 @@ class ProfessionalPredictionEngine:
         self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
         self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
         self.injury_analyzer = InjuryAnalyzer()
+        self.poisson_calculator = PoissonCalculator()
+        self.value_calculator = ValueCalculator()
+        self.confidence_calculator = ConfidenceCalculator(self.injury_analyzer, self.home_advantage)
+        
+        # Build team database from loaded data
+        self._build_team_database()
         
         print("✅ Prediction engine initialized successfully!")
         
-    def get_team_performance_data(self, team_key):
-        """Get performance data for a specific team"""
-        team_data = self.data['teams'][
-            self.data['teams']['team_key'] == team_key
-        ]
+    def _build_team_database(self):
+        """Build team database from loaded CSV data"""
+        for _, row in self.data['teams'].iterrows():
+            self.team_database[row['team_key']] = {
+                'league': row['league'],
+                'last_5_xg_total': row['last_5_xg_total'],
+                'last_5_xga_total': row['last_5_xga_total'],
+                'form_trend': row['form_trend'],
+                'location': row['location']
+            }
         
-        if team_data.empty:
-            print(f"❌ No performance data found for {team_key}")
-            return None
-            
-        return {
-            'last_5_xg_total': team_data['last_5_xg_total'].iloc[0],
-            'last_5_xga_total': team_data['last_5_xga_total'].iloc[0],
-            'form_trend': team_data['form_trend'].iloc[0],
-            'location': team_data['location'].iloc[0],
-            'league': team_data['league'].iloc[0]
+    def get_team_data(self, team_key):
+        """Get team data with fallback defaults"""
+        default_data = {
+            "league": "Unknown", 
+            "last_5_xg_total": 7.50,
+            "last_5_xga_total": 7.50,
+            "form_trend": 0.00
         }
         
-    def calculate_form_impact(self, form_trend):
-        """Calculate form impact multiplier"""
-        if form_trend > FORM_TREND_THRESHOLDS["positive"]:
-            return 1.05  # Positive form boost
-        elif form_trend < FORM_TREND_THRESHOLDS["negative"]:
-            return 0.95  # Negative form penalty
+        team_data = self.team_database.get(team_key, default_data).copy()
+        
+        # Calculate per-match averages
+        team_data['last_5_xg_per_match'] = team_data['last_5_xg_total'] / 5
+        team_data['last_5_xga_per_match'] = team_data['last_5_xga_total'] / 5
+        
+        return team_data
+        
+    def get_teams_by_league(self, league, team_type="all"):
+        """Get teams in a specific league, filtered by type (home/away/all)"""
+        teams = []
+        for team_name, data in self.team_database.items():
+            if data["league"] == league:
+                if team_type == "all":
+                    teams.append(team_name)
+                elif team_type == "home" and "Home" in team_name:
+                    teams.append(team_name)
+                elif team_type == "away" and "Away" in team_name:
+                    teams.append(team_name)
+        return sorted(teams)
+        
+    def get_team_base_name(self, team_name):
+        """Extract base team name without Home/Away suffix"""
+        if " Home" in team_name:
+            return team_name.replace(" Home", "")
+        elif " Away" in team_name:
+            return team_name.replace(" Away", "")
+        return team_name
+        
+    def validate_team_selection(self, home_team, away_team):
+        """Validate that teams are from the same base team and league"""
+        home_base = self.get_team_base_name(home_team)
+        away_base = self.get_team_base_name(away_team)
+        home_league = self.get_team_data(home_team)["league"]
+        away_league = self.get_team_data(away_team)["league"]
+        
+        errors = []
+        if home_base == away_base:
+            errors.append("Cannot select the same team for both home and away")
+        if home_league != away_league:
+            errors.append(f"Teams must be from the same league. {home_base} is in {home_league}, {away_base} is in {away_league}")
+        
+        return errors
+        
+    def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
+        """ENHANCED: Calculate proper goal expectancy with FIXED normalization"""
+        league_avg = LEAGUE_AVERAGES.get(league, {"xg": 1.4, "xga": 1.4})
+        
+        # Get team-specific home advantage
+        home_advantage_data = self.home_advantage.get_home_advantage(home_team)
+        away_advantage_data = self.home_advantage.get_home_advantage(away_team)
+        
+        home_boost = home_advantage_data["goals_boost"]
+        away_penalty = -away_advantage_data["goals_boost"] * 0.5  # Away teams get partial penalty
+        
+        # FIXED: Less aggressive normalization (0.8 power instead of 0.5)
+        home_goal_exp = home_xg * (away_xga / league_avg["xga"]) ** 0.8
+        
+        # Away goal expectancy: away attack vs home defense, normalized by league average  
+        away_goal_exp = away_xg * (home_xga / league_avg["xga"]) ** 0.8
+        
+        # Apply team-specific home advantage
+        home_goal_exp += home_boost
+        away_goal_exp += away_penalty
+        
+        return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
+        
+    def calculate_minimal_advantage(self, home_xg, home_xga, away_xg, away_xga):
+        """MINIMAL advantage adjustment to prevent over-correction"""
+        # Very small adjustment factor
+        alpha = 0.02  # Reduced from 0.12 (6x smaller)
+        
+        home_advantage = (home_xg - away_xg + away_xga - home_xga) * 0.1
+        
+        home_xg_adj = home_xg * (1 + home_advantage * alpha)
+        away_xg_adj = away_xg * (1 - home_advantage * alpha)
+        
+        # Leave defenses mostly unchanged
+        home_xga_adj = home_xga
+        away_xga_adj = away_xga
+        
+        return home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj
+        
+    def generate_insights(self, inputs, probabilities, home_xg, away_xg, home_xga, away_xga):
+        """ENHANCED: Generate insights with home advantage and injury context"""
+        insights = []
+        
+        # Get base team names for display
+        home_base = self.get_team_base_name(inputs['home_team'])
+        away_base = self.get_team_base_name(inputs['away_team'])
+        
+        # Get home advantage data
+        home_adv_data = self.home_advantage.get_home_advantage(inputs['home_team'])
+        away_adv_data = self.home_advantage.get_home_advantage(inputs['away_team'])
+        
+        # Home advantage insights
+        home_adv_strength = home_adv_data['strength']
+        away_adv_strength = away_adv_data['strength']
+        
+        if home_adv_strength == "strong":
+            insights.append(f"🏠 **STRONG HOME ADVANTAGE**: {home_base} performs much better at home (+{home_adv_data['ppg_diff']:.2f} PPG)")
+        elif home_adv_strength == "weak":
+            insights.append(f"🏠 **WEAK HOME FORM**: {home_base} struggles at home ({home_adv_data['ppg_diff']:+.2f} PPG difference)")
         else:
-            return 1.00  # Neutral form
-            
-    def calculate_league_strength(self, league):
-        """Apply league strength modifier"""
-        return LEAGUE_STRENGTH.get(league, 1.0)
+            insights.append(f"🏠 **MODERATE HOME ADVANTAGE**: {home_base} has standard home performance (+{home_adv_data['ppg_diff']:.2f} PPG)")
         
-    def predict_match(self, home_team, away_team, home_injury="None", away_injury="None"):
-        """Main prediction function"""
-        print(f"🎯 Predicting: {home_team} vs {away_team}")
+        if away_adv_strength == "strong":
+            insights.append(f"✈️ **POOR AWAY FORM**: {away_base} struggles away from home ({away_adv_data['ppg_diff']:+.2f} PPG difference)")
+        elif away_adv_strength == "weak":
+            insights.append(f"✈️ **STRONG AWAY FORM**: {away_base} travels well ({away_adv_data['ppg_diff']:+.2f} PPG difference)")
         
-        # Get performance data
-        home_data = self.get_team_performance_data(f"{home_team} Home")
-        away_data = self.get_team_performance_data(f"{away_team} Away")
+        # ENHANCED: Injury insights with impact levels
+        home_injury_data = self.injury_analyzer.injury_weights[inputs['home_injuries']]
+        away_injury_data = self.injury_analyzer.injury_weights[inputs['away_injuries']]
         
-        if not home_data or not away_data:
-            return {"error": "Could not load team data"}
-            
-        # Apply injury impacts
-        home_xg_for, home_xg_against = self.injury_analyzer.apply_injury_impact(
-            home_data['last_5_xg_total'], home_data['last_5_xga_total'], home_injury
+        if inputs['home_injuries'] != "None":
+            attack_reduction = (1-home_injury_data['attack_mult'])*100
+            defense_reduction = (1-home_injury_data['defense_mult'])*100
+            insights.append(f"🩹 **INJURY IMPACT**: {home_base} - {home_injury_data['description']} (Attack: -{attack_reduction:.0f}%, Defense: -{defense_reduction:.0f}%)")
+        
+        if inputs['away_injuries'] != "None":
+            attack_reduction = (1-away_injury_data['attack_mult'])*100
+            defense_reduction = (1-away_injury_data['defense_mult'])*100
+            insights.append(f"🩹 **INJURY IMPACT**: {away_base} - {away_injury_data['description']} (Attack: -{attack_reduction:.0f}%, Defense: -{defense_reduction:.0f}%)")
+        
+        # Rest insights
+        rest_diff = inputs['home_rest'] - inputs['away_rest']
+        if abs(rest_diff) >= 3:
+            if rest_diff > 0:
+                insights.append(f"⚖️ **REST ADVANTAGE**: {home_base} has {rest_diff} more rest days")
+            else:
+                insights.append(f"⚖️ **REST ADVANTAGE**: {away_base} has {-rest_diff} more rest days")
+        
+        # Team strength insights
+        if home_xg > away_xg + 0.3:
+            insights.append(f"📈 **ATTACKING EDGE**: {home_base} has significantly stronger attack ({home_xg:.2f} vs {away_xg:.2f} xG)")
+        elif away_xg > home_xg + 0.3:
+            insights.append(f"📈 **ATTACKING EDGE**: {away_base} has significantly stronger attack ({away_xg:.2f} vs {home_xg:.2f} xG)")
+        
+        if home_xga < away_xga - 0.3:
+            insights.append(f"🛡️ **DEFENSIVE EDGE**: {home_base} has much better defense ({home_xga:.2f} vs {away_xga:.2f} xGA)")
+        elif away_xga < home_xga - 0.3:
+            insights.append(f"🛡️ **DEFENSIVE EDGE**: {away_base} has much better defense ({away_xga:.2f} vs {home_xga:.2f} xGA)")
+        
+        # Match type analysis
+        total_goals = probabilities['expected_home_goals'] + probabilities['expected_away_goals']
+        if total_goals > 3.2:
+            insights.append(f"⚽ **HIGH-SCORING EXPECTED**: {total_goals:.2f} total xG suggests goals")
+        elif total_goals < 1.8:
+            insights.append(f"🔒 **LOW-SCORING EXPECTED**: {total_goals:.2f} total xG suggests defensive battle")
+        
+        # Value insights
+        value_bets = self.value_calculator.calculate_value_bets(probabilities, {
+            'home': inputs['home_odds'], 'draw': inputs['draw_odds'], 
+            'away': inputs['away_odds'], 'over_2.5': inputs['over_odds']
+        })
+        
+        excellent_bets = [k for k, v in value_bets.items() if v['rating'] == 'excellent']
+        good_bets = [k for k, v in value_bets.items() if v['rating'] == 'good']
+        
+        if excellent_bets:
+            bet_names = [{'home': f"{home_base} Win", 'draw': "Draw", 'away': f"{away_base} Win", 'over_2.5': "Over 2.5 Goals"}[bet] for bet in excellent_bets]
+            insights.append(f"💰 **EXCELLENT VALUE**: {', '.join(bet_names)} show strong positive EV")
+        elif good_bets:
+            bet_names = [{'home': f"{home_base} Win", 'draw': "Draw", 'away': f"{away_base} Win", 'over_2.5': "Over 2.5 Goals"}[bet] for bet in good_bets]
+            insights.append(f"💰 **GOOD VALUE**: {', '.join(bet_names)} show positive EV")
+        
+        return insights
+        
+    def predict_match(self, inputs):
+        """ENHANCED MAIN PREDICTION FUNCTION with all improvements"""
+        # Validate team selection
+        validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
+        if validation_errors:
+            return None, validation_errors, []
+        
+        # Get league for normalization
+        league = self.get_team_data(inputs['home_team'])["league"]
+        
+        # Calculate per-match averages from user inputs
+        home_xg_per_match = inputs['home_xg_total'] / 5
+        home_xga_per_match = inputs['home_xga_total'] / 5
+        away_xg_per_match = inputs['away_xg_total'] / 5
+        away_xga_per_match = inputs['away_xga_total'] / 5
+        
+        # Apply modifiers
+        home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
+            home_xg_per_match, home_xga_per_match,
+            inputs['home_injuries'], inputs['home_rest'],
+            self.get_team_data(inputs['home_team'])['form_trend']
         )
-        away_xg_for, away_xg_against = self.injury_analyzer.apply_injury_impact(
-            away_data['last_5_xg_total'], away_data['last_5_xga_total'], away_injury
+        
+        away_xg_adj, away_xga_adj = self.injury_analyzer.apply_injury_impact(
+            away_xg_per_match, away_xga_per_match,
+            inputs['away_injuries'], inputs['away_rest'],
+            self.get_team_data(inputs['away_team'])['form_trend']
         )
         
-        # Calculate form impacts
-        home_form_mult = self.calculate_form_impact(home_data['form_trend'])
-        away_form_mult = self.calculate_form_impact(away_data['form_trend'])
-        
-        # Calculate quality difference
-        quality_diff = self.team_quality.calculate_quality_difference(home_team, away_team)
-        
-        # Calculate home advantage
-        home_boost = self.home_advantage.calculate_home_boost(
-            f"{home_team} Home", f"{away_team} Away"
+        # Apply MINIMAL advantage adjustment
+        home_xg_ba, home_xga_ba, away_xg_ba, away_xga_ba = self.calculate_minimal_advantage(
+            home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj
         )
         
-        # Apply league strength
-        home_league_mult = self.calculate_league_strength(home_data['league'])
-        away_league_mult = self.calculate_league_strength(away_data['league'])
-        
-        # Calculate expected goals
-        home_expected_goals = (
-            (home_xg_for / 5) * home_form_mult * 
-            (1 + quality_diff * 0.1) * home_league_mult + home_boost
-        )
-        away_expected_goals = (
-            (away_xg_for / 5) * away_form_mult * 
-            (1 - quality_diff * 0.1) * away_league_mult
+        # ENHANCED: Calculate proper goal expectancy with FIXED normalization
+        home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
+            home_xg_ba, home_xga_ba, away_xg_ba, away_xga_ba, 
+            inputs['home_team'], inputs['away_team'], league
         )
         
-        # Adjust for defensive strength
-        home_defense = (home_xg_against / 5) * home_league_mult
-        away_defense = (away_xg_against / 5) * away_league_mult
+        # Calculate probabilities using proper goal expectancy
+        probabilities = self.poisson_calculator.calculate_poisson_probabilities(home_goal_exp, away_goal_exp)
         
-        home_expected_goals -= away_defense * 0.2
-        away_expected_goals -= home_defense * 0.2
-        
-        # Ensure minimum values
-        home_expected_goals = max(home_expected_goals, 0.1)
-        away_expected_goals = max(away_expected_goals, 0.1)
-        
-        # Calculate win probabilities using Poisson distribution
-        home_win_prob, draw_prob, away_win_prob = self._calculate_poisson_probabilities(
-            home_expected_goals, away_expected_goals
+        # Calculate confidence
+        confidence, confidence_factors = self.confidence_calculator.calculate_confidence(
+            home_xg_per_match, away_xg_per_match,
+            home_xga_per_match, away_xga_per_match, inputs
         )
         
-        # Generate scoreline predictions
-        likely_scorelines = self._predict_scorelines(
-            home_expected_goals, away_expected_goals
+        # Calculate context reliability
+        rest_diff = abs(inputs['home_rest'] - inputs['away_rest'])
+        reliability_score, reliability_level, reliability_advice = self.confidence_calculator.get_context_reliability(
+            inputs['home_injuries'], inputs['away_injuries'], rest_diff, confidence
         )
         
-        return {
-            'home_team': home_team,
-            'away_team': away_team,
-            'home_expected_goals': round(home_expected_goals, 2),
-            'away_expected_goals': round(away_expected_goals, 2),
-            'home_win_probability': round(home_win_prob, 3),
-            'draw_probability': round(draw_prob, 3),
-            'away_win_probability': round(away_win_prob, 3),
-            'home_injury_impact': home_injury,
-            'away_injury_impact': away_injury,
-            'likely_scorelines': likely_scorelines,
-            'home_advantage_boost': round(home_boost, 3),
-            'quality_difference': round(quality_diff, 3)
+        # Calculate value bets
+        odds = {
+            'home': inputs['home_odds'],
+            'draw': inputs['draw_odds'],
+            'away': inputs['away_odds'],
+            'over_2.5': inputs['over_odds']
+        }
+        value_bets = self.value_calculator.calculate_value_bets(probabilities, odds)
+        
+        # Generate insights
+        insights = self.generate_insights(inputs, probabilities, home_xg_per_match, away_xg_per_match, home_xga_per_match, away_xga_per_match)
+        
+        # Store calculation details for transparency
+        home_adv_data = self.home_advantage.get_home_advantage(inputs['home_team'])
+        away_adv_data = self.home_advantage.get_home_advantage(inputs['away_team'])
+        home_injury_data = self.injury_analyzer.injury_weights[inputs['home_injuries']]
+        away_injury_data = self.injury_analyzer.injury_weights[inputs['away_injuries']]
+        
+        calculation_details = {
+            'home_xg_raw': home_xg_per_match,
+            'home_xg_modified': home_xg_ba,
+            'away_xg_raw': away_xg_per_match, 
+            'away_xg_modified': away_xg_ba,
+            'home_xga_raw': home_xga_per_match,
+            'home_xga_modified': home_xga_ba,
+            'away_xga_raw': away_xga_per_match,
+            'away_xga_modified': away_xga_ba,
+            'home_goal_expectancy': home_goal_exp,
+            'away_goal_expectancy': away_goal_exp,
+            'total_goals_lambda': home_goal_exp + away_goal_exp,
+            'home_advantage_boost': home_adv_data['goals_boost'],
+            'away_advantage_penalty': -away_adv_data['goals_boost'] * 0.5,
+            'home_advantage_strength': home_adv_data['strength'],
+            'away_advantage_strength': away_adv_data['strength'],
+            'home_injury_impact': f"{((1-home_injury_data['attack_mult'])*100):.1f}% attack, {((1-home_injury_data['defense_mult'])*100):.1f}% defense",
+            'away_injury_impact': f"{((1-away_injury_data['attack_mult'])*100):.1f}% attack, {((1-away_injury_data['defense_mult'])*100):.1f}% defense"
         }
         
-    def _calculate_poisson_probabilities(self, home_exp, away_exp):
-        """Calculate match probabilities using Poisson distribution"""
-        home_win = 0
-        draw = 0
-        away_win = 0
+        result = {
+            'probabilities': probabilities,
+            'expected_goals': {'home': probabilities['expected_home_goals'], 'away': probabilities['expected_away_goals']},
+            'value_bets': value_bets,
+            'confidence': confidence,
+            'confidence_factors': confidence_factors,
+            'reliability_score': reliability_score,
+            'reliability_level': reliability_level,
+            'reliability_advice': reliability_advice,
+            'insights': insights,
+            'per_match_stats': {
+                'home_xg': home_xg_per_match,
+                'home_xga': home_xga_per_match,
+                'away_xg': away_xg_per_match,
+                'away_xga': away_xga_per_match
+            },
+            'calculation_details': calculation_details
+        }
         
-        for i in range(8):  # Home goals
-            for j in range(8):  # Away goals
-                prob = (np.exp(-home_exp) * home_exp**i / np.math.factorial(i)) * \
-                       (np.exp(-away_exp) * away_exp**j / np.math.factorial(j))
-                
-                if i > j:
-                    home_win += prob
-                elif i == j:
-                    draw += prob
-                else:
-                    away_win += prob
-                    
-        # Normalize probabilities
-        total = home_win + draw + away_win
-        if total > 0:
-            home_win /= total
-            draw /= total
-            away_win /= total
-            
-        return home_win, draw, away_win
+        return result, [], []
         
-    def _predict_scorelines(self, home_exp, away_exp):
-        """Predict most likely scorelines"""
-        scorelines = []
-        
-        for i in range(5):  # Home goals
-            for j in range(5):  # Away goals
-                prob = (np.exp(-home_exp) * home_exp**i / np.math.factorial(i)) * \
-                       (np.exp(-away_exp) * away_exp**j / np.math.factorial(j))
-                scorelines.append((f"{i}-{j}", prob))
-                
-        # Sort by probability and return top 3
-        scorelines.sort(key=lambda x: x[1], reverse=True)
-        return [scoreline[0] for scoreline in scorelines[:3]]
-        
-    def get_available_teams(self):
-        """Get list of available teams for selection"""
-        teams_df = self.data['team_quality']
-        return sorted(teams_df['team_base'].unique().tolist())
+    def get_available_leagues(self):
+        """Get list of available leagues from the database"""
+        leagues = set()
+        for team_data in self.team_database.values():
+            leagues.add(team_data["league"])
+        return sorted(list(leagues))
