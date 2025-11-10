@@ -313,7 +313,7 @@ def display_understat_input_form(engine):
         st.write(f"**Selected:** <span class='league-badge'>{selected_league}</span>", unsafe_allow_html=True)
         st.write(f"**Data Quality:** ✅ Home/Away specific xG data")
         st.write(f"**Home Advantage:** ✅ Team-specific modeling")
-        st.write(f"**Injury Model:** ✅ Enhanced player impact")
+        st.write(f"**Injury Model:** ✅ REALISTIC 5-15% player impact")
         st.write(f"**Validation:** Same-team and cross-league prevention")
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -500,13 +500,21 @@ def display_understat_input_form(engine):
             format_func=lambda x: f"{x}: {engine.injury_weights[x]['description']}"
         )
         
-        # Show injury impact preview
+        # Show injury impact preview - UPDATED to use consistent display values
         if home_injuries != "None":
-            injury_data = engine.injury_weights[home_injuries]
-            attack_impact = (1 - injury_data['attack_mult']) * 100
-            defense_impact = (1 - injury_data['defense_mult']) * 100
-            injury_class = f"injury-{injury_data['impact_level'].lower()}"
-            st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{injury_data['impact_level'].upper()}</span> - Attack: -{attack_impact:.0f}%, Defense: -{defense_impact:.0f}%", unsafe_allow_html=True)
+            # Use the new display method for consistent percentages
+            if hasattr(engine.injury_analyzer, 'get_injury_display_info'):
+                home_display = engine.injury_analyzer.get_injury_display_info(home_injuries)
+                injury_class = f"injury-{home_display['impact_level'].lower()}"
+                st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{home_display['impact_level'].upper()}</span> - Attack: -{home_display['attack_reduction']}, Defense: -{home_display['defense_reduction']}", unsafe_allow_html=True)
+                st.write(f"**Practical Impact:** {home_display['practical_impact']}")
+            else:
+                # Fallback to original method
+                injury_data = engine.injury_weights[home_injuries]
+                attack_impact = (1 - injury_data['attack_mult']) * 100
+                defense_impact = (1 - injury_data['defense_mult']) * 100
+                injury_class = f"injury-{injury_data['impact_level'].lower()}"
+                st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{injury_data['impact_level'].upper()}</span> - Attack: -{attack_impact:.0f}%, Defense: -{defense_impact:.0f}%", unsafe_allow_html=True)
         
         away_injuries = st.selectbox(
             f"{away_base} Injuries",
@@ -516,13 +524,21 @@ def display_understat_input_form(engine):
             format_func=lambda x: f"{x}: {engine.injury_weights[x]['description']}"
         )
         
-        # Show injury impact preview
+        # Show injury impact preview - UPDATED to use consistent display values
         if away_injuries != "None":
-            injury_data = engine.injury_weights[away_injuries]
-            attack_impact = (1 - injury_data['attack_mult']) * 100
-            defense_impact = (1 - injury_data['defense_mult']) * 100
-            injury_class = f"injury-{injury_data['impact_level'].lower()}"
-            st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{injury_data['impact_level'].upper()}</span> - Attack: -{attack_impact:.0f}%, Defense: -{defense_impact:.0f}%", unsafe_allow_html=True)
+            # Use the new display method for consistent percentages
+            if hasattr(engine.injury_analyzer, 'get_injury_display_info'):
+                away_display = engine.injury_analyzer.get_injury_display_info(away_injuries)
+                injury_class = f"injury-{away_display['impact_level'].lower()}"
+                st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{away_display['impact_level'].upper()}</span> - Attack: -{away_display['attack_reduction']}, Defense: -{away_display['defense_reduction']}", unsafe_allow_html=True)
+                st.write(f"**Practical Impact:** {away_display['practical_impact']}")
+            else:
+                # Fallback to original method
+                injury_data = engine.injury_weights[away_injuries]
+                attack_impact = (1 - injury_data['attack_mult']) * 100
+                defense_impact = (1 - injury_data['defense_mult']) * 100
+                injury_class = f"injury-{injury_data['impact_level'].lower()}"
+                st.write(f"**Expected Impact:** <span class='injury-impact {injury_class}'>{injury_data['impact_level'].upper()}</span> - Attack: -{attack_impact:.0f}%, Defense: -{defense_impact:.0f}%", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -696,6 +712,8 @@ def display_prediction_results(engine, result, inputs):
             st.write("**Injury Impacts:**")
             st.write(f"- Home: {details['home_injury_impact']}")
             st.write(f"- Away: {details['away_injury_impact']}")
+            if 'injury_model_note' in details:
+                st.write(f"**Note:** {details['injury_model_note']}")
             st.write("**Method:** Defense-aware Poisson distribution with team-specific home advantage")
         
     st.markdown('</div>', unsafe_allow_html=True)
