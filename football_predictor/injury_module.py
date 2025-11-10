@@ -1,9 +1,55 @@
-from .config import INJURY_WEIGHTS, FATIGUE_MULTIPLIERS
-
 class InjuryAnalyzer:
     def __init__(self):
-        self.injury_weights = INJURY_WEIGHTS
-        self.fatigue_multipliers = FATIGUE_MULTIPLIERS
+        # ENHANCED Injury impact weights - defense injuries hit harder to increase goals
+        self.injury_weights = {
+            "None": {
+                "attack_mult": 1.00, 
+                "defense_mult": 1.00, 
+                "description": "Full squad available",
+                "key_players_missing": 0,
+                "player_type": "None",
+                "impact_level": "None"
+            },
+            "Minor": {
+                "attack_mult": 0.95, 
+                "defense_mult": 0.94,  # Defense hit slightly harder
+                "description": "1-2 rotational/fringe players missing",
+                "key_players_missing": 0,
+                "player_type": "Rotational",
+                "impact_level": "Low"
+            },
+            "Moderate": {
+                "attack_mult": 0.90,  # Reduced from 0.88
+                "defense_mult": 0.85,  # Defense hit harder (was 0.90)
+                "description": "1-2 key starters missing", 
+                "key_players_missing": 1,
+                "player_type": "Key Starters",
+                "impact_level": "Medium"
+            },
+            "Significant": {
+                "attack_mult": 0.82,  # Reduced from 0.78
+                "defense_mult": 0.72,  # Defense hit much harder (was 0.82)
+                "description": "3-4 key starters missing",
+                "key_players_missing": 3, 
+                "player_type": "Key Starters",
+                "impact_level": "High"
+            },
+            "Crisis": {
+                "attack_mult": 0.70,  # Reduced from 0.65
+                "defense_mult": 0.58,  # Defense crushed (was 0.72)
+                "description": "5+ key starters missing",
+                "key_players_missing": 5,
+                "player_type": "Key Starters",
+                "impact_level": "Severe"
+            }
+        }
+        
+        # Fatigue multipliers
+        self.fatigue_multipliers = {
+            2: 0.85, 3: 0.88, 4: 0.91, 5: 0.94, 6: 0.96, 
+            7: 0.98, 8: 1.00, 9: 1.01, 10: 1.02, 11: 1.03,
+            12: 1.03, 13: 1.03, 14: 1.03
+        }
         
     def apply_injury_impact(self, xg_for, xg_against, injury_level, rest_days, form_trend):
         """ENHANCED: Apply modifiers with improved injury impact"""
