@@ -323,6 +323,62 @@ class ProfessionalPredictionEngine:
         
         return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
 
+    def _apply_prediction_sanity_checks(self, result, home_data, away_data):
+        """Apply sanity checks to prevent unrealistic predictions"""
+        home_elo = home_data['base_quality']['elo']
+        away_elo = away_data['base_quality']['elo']
+        home_tier = home_data['base_quality']['structural_tier']
+        away_tier = away_data['base_quality']['structural_tier']
+        
+        home_win_prob = result['probabilities']['home_win']
+        away_win_prob = result['probabilities']['away_win']
+        
+        # Debug info
+        print(f"🔍 SANITY CHECK: {home_data['base_name']} ({home_tier}, ELO {home_elo}) vs {away_data['base_name']} ({away_tier}, ELO {away_elo})")
+        print(f"🔍 Before sanity: Home {home_win_prob:.1%}, Away {away_win_prob:.1%}")
+        
+        # Sanity check 1: Weak teams shouldn't be heavy favorites over strong teams
+        if (home_tier == 'weak' and away_tier == 'strong' and home_win_prob > 0.6) or \
+           (away_tier == 'weak' and home_tier == 'strong' and away_win_prob > 0.6):
+            print(f"🚨 SANITY: Weak team favored over strong team. Applying correction.")
+            # Apply ELO-based correction
+            elo_diff = home_elo - away_elo
+            elo_correction = 1 / (1 + 10 ** (-elo_diff / 400))
+            
+            if home_tier == 'weak':
+                home_win_prob = min(home_win_prob, elo_correction * 0.8)
+                away_win_prob = max(away_win_prob, (1 - elo_correction) * 0.8)
+            else:
+                away_win_prob = min(away_win_prob, (1 - elo_correction) * 0.8)
+                home_win_prob = max(home_win_prob, elo_correction * 0.8)
+            
+            # Re-normalize
+            total = home_win_prob + result['probabilities']['draw'] + away_win_prob
+            result['probabilities']['home_win'] = home_win_prob / total
+            result['probabilities']['away_win'] = away_win_prob / total
+            result['probabilities']['draw'] = result['probabilities']['draw'] / total
+        
+        # Sanity check 2: Total goals shouldn't be unrealistically high
+        total_goals = result['expected_goals']['home'] + result['expected_goals']['away']
+        if total_goals > 5.0:
+            print(f"🚨 SANITY: Unrealistic total goals {total_goals:.2f}. Applying damping.")
+            damping = 4.5 / total_goals  # Cap at 4.5 total goals
+            result['expected_goals']['home'] *= damping
+            result['expected_goals']['away'] *= damping
+        
+        # Sanity check 3: Very weak teams shouldn't have high goal expectancy
+        if home_tier == 'weak' and result['expected_goals']['home'] > 2.0:
+            print(f"🚨 SANITY: Weak team {home_data['base_name']} has high goal expectancy. Capping.")
+            result['expected_goals']['home'] = min(result['expected_goals']['home'], 1.5)
+        
+        if away_tier == 'weak' and result['expected_goals']['away'] > 2.0:
+            print(f"🚨 SANITY: Weak team {away_data['base_name']} has high goal expectancy. Capping.")
+            result['expected_goals']['away'] = min(result['expected_goals']['away'], 1.5)
+        
+        print(f"🔍 After sanity: Home {result['probabilities']['home_win']:.1%}, Away {result['probabilities']['away_win']:.1%}")
+        
+        return result
+
     def generate_enhanced_insights(self, inputs, probabilities, home_team, away_team):
         """Generate enhanced insights using integrated data"""
         insights = []
@@ -410,6 +466,7 @@ class ProfessionalPredictionEngine:
         
         # Use enhanced predictor if available, otherwise fall back to basic
         if self.enhanced_predictor:
+            print("🎯 Using Enhanced Predictor")
             winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
                 inputs['home_team'], inputs['away_team'],
                 home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,
@@ -426,6 +483,7 @@ class ProfessionalPredictionEngine:
                 home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
             )
         else:
+            print("🎯 Using Basic Predictor (Enhanced not available)")
             # Fall back to basic predictions
             home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
                 home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj,
@@ -534,6 +592,9 @@ class ProfessionalPredictionEngine:
             'reliability_level': 'High' if confidence > 70 else 'Moderate' if confidence > 55 else 'Low',
             'reliability_advice': 'Enhanced predictions using all integrated data provide high reliability'
         }
+        
+        # Apply sanity checks as final defense
+        result = self._apply_prediction_sanity_checks(result, home_data, away_data)
         
         return result, [], []
 
