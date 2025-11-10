@@ -1,8 +1,11 @@
-from .config import VALUE_THRESHOLDS
-
 class ValueCalculator:
     def __init__(self):
-        self.value_thresholds = VALUE_THRESHOLDS
+        self.value_thresholds = {
+            "excellent": {"ev": 0.08, "value_ratio": 1.12},
+            "good": {"ev": 0.04, "value_ratio": 1.06},
+            "fair": {"ev": 0.01, "value_ratio": 1.02},
+            "poor": {"ev": 0.00, "value_ratio": 1.00}
+        }
         
     def calculate_true_value(self, probability, odds):
         """Proper value calculation"""
