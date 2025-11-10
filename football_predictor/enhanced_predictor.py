@@ -1,292 +1,419 @@
+import math
+from typing import Tuple, Dict, Any
 import numpy as np
 from scipy.stats import poisson
 
+
 class EnhancedPredictor:
+    """
+    Enhanced predictor combining Poisson (xG) and ELO, with injury and league damping,
+    and improved probability normalization and confidence scoring.
+
+    Usage:
+        predictor = EnhancedPredictor(data_integrator)
+        out = predictor.predict_winner_enhanced(home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries)
+    """
+
     def __init__(self, data_integrator):
         self.data_integrator = data_integrator
-        
-    def predict_winner_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries):
-        """Enhanced winner prediction using ELO blending and quality factors"""
+
+    # -------------------------
+    # Public prediction methods
+    # -------------------------
+    def predict_winner_enhanced(
+        self,
+        home_team: str,
+        away_team: str,
+        home_xg: float,
+        away_xg: float,
+        home_xga: float,
+        away_xga: float,
+        home_injuries: str = "None",
+        away_injuries: str = "None",
+    ) -> Dict[str, Any]:
+        """
+        Returns blended probabilities for home/draw/away, confidence and expected goals.
+        """
+
+        # Get integrated team data
         home_data = self.data_integrator.get_comprehensive_team_data(home_team)
         away_data = self.data_integrator.get_comprehensive_team_data(away_team)
-        
-        # Base goal expectancy
+        league = home_data.get("league", away_data.get("league", "Premier League"))
+
+        # 1) compute base expected goals (apply quality + home advantage)
         home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
-        
-        # ELO-based probabilities (your Bayesian blending recommendation)
-        elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
-        
-        # Poisson-based probabilities
-        poisson_home_win, poisson_draw, poisson_away_win = self._calculate_enhanced_poisson_probabilities(
+
+        # 2) apply injury adjustments to goal expectancies (attack multipliers)
+        inj_adj = self._calculate_injury_adjustment(home_injuries, away_injuries)
+        home_goal_exp *= inj_adj["home_attack"]
+        away_goal_exp *= inj_adj["away_attack"]
+
+        # 3) apply league soft damping if totals are high
+        home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
+
+        # 4) Poisson-based probabilities
+        poisson_home_win, poisson_draw, poisson_away_win = self._calculate_poisson_match_probs(
             home_goal_exp, away_goal_exp
         )
-        
-        # Bayesian blending: 60% Poisson, 40% ELO (adjustable weights)
-        home_win_prob = 0.6 * poisson_home_win + 0.4 * elo_home_win
-        draw_prob = 0.6 * poisson_draw + 0.4 * elo_draw
-        away_win_prob = 0.6 * poisson_away_win + 0.4 * elo_away_win
-        
-        # Apply injury impacts
-        injury_adjustment = self._calculate_injury_adjustment(home_injuries, away_injuries)
-        home_win_prob *= injury_adjustment['home_attack']
-        away_win_prob *= injury_adjustment['away_attack']
-        
-        # Normalize
-        total = home_win_prob + draw_prob + away_win_prob
-        home_win_prob /= total
-        draw_prob /= total
-        away_win_prob /= total
-        
-        # Apply league damping factor (your recommendation)
-        home_goal_exp, away_goal_exp = self._apply_league_damping(
-            home_goal_exp, away_goal_exp, home_data['league']
-        )
-        
-        confidence = self._calculate_winner_confidence(
-            home_win_prob, draw_prob, away_win_prob, home_data, away_data
-        )
-        
-        return {
-            'home_win': home_win_prob,
-            'draw': draw_prob,
-            'away_win': away_win_prob,
-            'confidence': confidence,
-            'expected_goals': {'home': home_goal_exp, 'away': away_goal_exp},
-            'key_factors': {
-                'poisson_weight': 0.6,
-                'elo_weight': 0.4,
-                'home_elo_advantage': home_data['base_quality']['elo'] - away_data['base_quality']['elo']
-            }
+
+        # 5) ELO-based probabilities
+        elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
+
+        # 6) Dynamic blending weights (more xG signal -> higher Poisson weight)
+        poisson_weight = self._compute_dynamic_poisson_weight(home_xg, away_xg)
+        elo_weight = 1.0 - poisson_weight
+
+        home_prob = poisson_weight * poisson_home_win + elo_weight * elo_home_win
+        draw_prob = poisson_weight * poisson_draw + elo_weight * elo_draw
+        away_prob = poisson_weight * poisson_away_win + elo_weight * elo_away_win
+
+        # 7) Normalise to ensure numeric stability
+        home_prob, draw_prob, away_prob = self._normalize_triple(home_prob, draw_prob, away_prob)
+
+        # 8) Confidence and package result
+        confidence = self._calculate_winner_confidence(home_prob, draw_prob, away_prob, home_data, away_data)
+        result = {
+            "home_win": round(home_prob, 4),
+            "draw": round(draw_prob, 4),
+            "away_win": round(away_prob, 4),
+            "confidence": int(confidence),
+            "expected_goals": {"home": round(home_goal_exp, 3), "away": round(away_goal_exp, 3)},
+            "key_factors": {
+                "poisson_weight": round(poisson_weight, 3),
+                "elo_weight": round(elo_weight, 3),
+                "elo_diff": home_data["base_quality"]["elo"] - away_data["base_quality"]["elo"],
+                "injury_home": home_injuries,
+                "injury_away": away_injuries,
+                "league": league,
+            },
         }
-    
-    def _calculate_elo_probabilities(self, home_data, away_data):
-        """Calculate ELO-based probabilities"""
-        home_elo = home_data['base_quality']['elo']
-        away_elo = away_data['base_quality']['elo']
-        
-        # ELO difference with home advantage (typically +100 ELO for home)
-        elo_diff = home_elo - away_elo + 100
-        
-        # Convert ELO difference to probabilities
-        home_win_prob = 1 / (1 + 10 ** (-elo_diff / 400))
-        away_win_prob = 1 / (1 + 10 ** ((elo_diff) / 400))
-        
-        # Draw probability (simplified - can be more sophisticated)
-        draw_prob = 1 - home_win_prob - away_win_prob
-        if draw_prob < 0.1:
-            draw_prob = 0.1
-            # Re-normalize
-            total = home_win_prob + away_win_prob + draw_prob
-            home_win_prob /= total
-            away_win_prob /= total
-            draw_prob /= total
-        
-        return home_win_prob, draw_prob, away_win_prob
-    
-    def _calculate_enhanced_goal_expectancy(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
-        """Enhanced goal expectancy with quality adjustments"""
+        return result
+
+    def predict_over_under_enhanced(
+        self,
+        home_team: str,
+        away_team: str,
+        home_xg: float,
+        away_xg: float,
+        home_xga: float,
+        away_xga: float,
+    ) -> Dict[str, Any]:
+        """
+        Predicts over/under markets (1.5, 2.5, 3.5). Returns probabilities, expected total, and confidence.
+        """
         home_data = self.data_integrator.get_comprehensive_team_data(home_team)
         away_data = self.data_integrator.get_comprehensive_team_data(away_team)
-        
-        league_avg_xg = self.data_integrator._get_league_avg_xg(home_data['league'])
-        
-        # Quality-adjusted goal expectancy
-        home_goal_exp = home_xg * (away_xga / league_avg_xg) * home_data['attack_strength']
-        away_goal_exp = away_xg * (home_xga / league_avg_xg) * away_data['attack_strength']
-        
-        # Apply home advantage from integrated data
-        home_advantage = home_data['home_advantage']['goals_boost']
-        home_goal_exp += home_advantage
-        
-        return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
-    
-    def _apply_league_damping(self, home_goal_exp, away_goal_exp, league):
-        """Apply league-specific damping to prevent unrealistic totals"""
-        league_damping = {
-            "Premier League": 0.85,
-            "La Liga": 0.82,
-            "Bundesliga": 0.90,  # Higher scoring league
-            "Serie A": 0.80,
-            "Ligue 1": 0.83,
-            "RFPL": 0.78
+        league = home_data.get("league", away_data.get("league", "Premier League"))
+
+        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
+            home_team, away_team, home_xg, away_xg, home_xga, away_xga
+        )
+
+        # Apply soft damping and no injuries here (this function expects adjusted inputs if needed)
+        home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
+        total_lambda = home_goal_exp + away_goal_exp
+
+        # Use integer cdf values: Over 2.5 = 1 - P(X <= 2)
+        over_15 = 1.0 - poisson.cdf(1, total_lambda)
+        over_25 = 1.0 - poisson.cdf(2, total_lambda)
+        over_35 = 1.0 - poisson.cdf(3, total_lambda)
+
+        # Defensive consistency adjustment (lower over-prob if both teams strong defensively)
+        defense_consistency = (home_data.get("clean_sheet_pct", 0) + away_data.get("clean_sheet_pct", 0)) / 200.0
+        consistency_factor = 1.0 + (0.5 - defense_consistency) * 0.35
+        over_25 *= consistency_factor
+        over_25 = float(np.clip(over_25, 0.02, 0.98))
+        over_15 = float(np.clip(over_15 * consistency_factor, 0.02, 0.995))
+        over_35 = float(np.clip(over_35 * consistency_factor, 0.01, 0.95))
+
+        confidence = self._calculate_over_under_confidence(total_lambda, home_data, away_data)
+
+        return {
+            "over_1.5": round(over_15, 4),
+            "over_2.5": round(over_25, 4),
+            "over_3.5": round(over_35, 4),
+            "under_1.5": round(1 - over_15, 4),
+            "under_2.5": round(1 - over_25, 4),
+            "under_3.5": round(1 - over_35, 4),
+            "expected_total_goals": round(total_lambda, 3),
+            "confidence": int(confidence),
+            "key_factors": {"total_lambda": round(total_lambda, 3), "defense_consistency": round(defense_consistency, 3)},
         }
-        
-        damping = league_damping.get(league, 0.85)
-        
-        # Only apply damping if total goals > 4.0
-        total_goals = home_goal_exp + away_goal_exp
-        if total_goals > 4.0:
-            home_goal_exp *= damping
-            away_goal_exp *= damping
-        
+
+    def predict_btts_enhanced(
+        self,
+        home_team: str,
+        away_team: str,
+        home_xg: float,
+        away_xg: float,
+        home_xga: float,
+        away_xga: float,
+    ) -> Dict[str, Any]:
+        """
+        Predict BTTS (both teams to score) using Poisson and historical BTTS blend.
+        """
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+
+        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
+            home_team, away_team, home_xg, away_xg, home_xga, away_xga
+        )
+
+        prob_home_scores = 1.0 - poisson.cdf(0, home_goal_exp)
+        prob_away_scores = 1.0 - poisson.cdf(0, away_goal_exp)
+        poisson_btts = prob_home_scores * prob_away_scores
+
+        historical_home = home_data.get("btts_pct", 50) / 100.0
+        historical_away = away_data.get("btts_pct", 50) / 100.0
+        historical_avg = (historical_home + historical_away) / 2.0
+
+        # Dynamic blend: if xG signal is strong (both > 1.2) rely more on Poisson
+        blend_weight_hist = 0.6 if (home_goal_exp < 1.2 or away_goal_exp < 1.2) else 0.4
+        btts_prob = blend_weight_hist * historical_avg + (1 - blend_weight_hist) * poisson_btts
+        btts_prob = float(np.clip(btts_prob, 0.05, 0.95))
+
+        confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
+
+        return {
+            "btts_yes": round(btts_prob, 4),
+            "btts_no": round(1.0 - btts_prob, 4),
+            "confidence": int(confidence),
+            "key_factors": {"historical_btts": round(historical_avg, 3), "poisson_btts": round(poisson_btts, 3)},
+        }
+
+    # -------------------------
+    # Internal helper methods
+    # -------------------------
+    def _calculate_elo_probabilities(self, home_data: dict, away_data: dict) -> Tuple[float, float, float]:
+        """
+        Converts ELO difference into a three-way (home/draw/away) probability.
+        Uses logistic for win expectation and a simple calibrated draw factor that increases when teams are close.
+        """
+        home_elo = home_data["base_quality"].get("elo", 1600)
+        away_elo = away_data["base_quality"].get("elo", 1600)
+
+        # Home advantage in ELO points (calibrated)
+        HOME_ADV_ELO = 80
+        elo_diff = (home_elo - away_elo) + HOME_ADV_ELO
+
+        # Home win raw using logistic-style conversion (Elo->win)
+        home_win_raw = 1.0 / (1.0 + 10 ** (-elo_diff / 400.0))
+
+        # Draw probability increases when teams are close
+        closeness = max(0.0, 1.0 - abs(elo_diff) / 600.0)  # closeness in [0,1]
+        base_draw = 0.20  # baseline draw probability
+        draw_prob = base_draw * (0.6 + 0.4 * closeness)  # boost draw when close
+
+        # Split remaining mass between home and away (proportional to raw)
+        remaining = 1.0 - draw_prob
+        away_win_raw = 1.0 - home_win_raw
+        # Normalize raw pair to remaining
+        denom = home_win_raw + away_win_raw
+        if denom <= 0:
+            home_win = remaining / 2
+            away_win = remaining / 2
+        else:
+            home_win = remaining * (home_win_raw / denom)
+            away_win = remaining * (away_win_raw / denom)
+
+        # Safety clamp & normalize final triple
+        home_win, draw_prob, away_win = self._normalize_triple(home_win, draw_prob, away_win)
+        return home_win, draw_prob, away_win
+
+    def _calculate_enhanced_goal_expectancy(
+        self,
+        home_team: str,
+        away_team: str,
+        home_xg: float,
+        away_xg: float,
+        home_xga: float,
+        away_xga: float,
+    ) -> Tuple[float, float]:
+        """
+        Calculate quality-adjusted expected goals for each side based on integrated metrics.
+        """
+        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
+        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        league_avg = self.data_integrator._get_league_avg_xg(home_data.get("league", "Premier League"))
+
+        # Avoid division by zero
+        league_avg = max(0.1, league_avg)
+        # Base adjustment: scale by opponent defensive xGA relative to league average, and by attack strength
+        home_goal_exp = max(0.01, home_xg * (away_xga / league_avg) * float(home_data.get("attack_strength", 1.0)))
+        away_goal_exp = max(0.01, away_xg * (home_xga / league_avg) * float(away_data.get("attack_strength", 1.0)))
+
+        # Home advantage boost (small additive, calibrated to typical values)
+        home_adv = float(home_data.get("home_advantage", {}).get("goals_boost", 0.0))
+        home_goal_exp += home_adv
+
         return home_goal_exp, away_goal_exp
-    
-    def _calculate_enhanced_poisson_probabilities(self, home_lambda, away_lambda):
-        """Calculate Poisson probabilities with goal limits"""
-        home_win = 0
-        draw = 0
-        away_win = 0
-        
-        # Reasonable goal limits (your variance recommendation)
-        for i in range(0, 7):  # home goals
-            for j in range(0, 7):  # away goals
-                prob = poisson.pmf(i, home_lambda) * poisson.pmf(j, away_lambda)
+
+    def _apply_league_damping(self, home_goal_exp: float, away_goal_exp: float, league: str) -> Tuple[float, float]:
+        """
+        Soft damping for very-high total-goal estimates. Uses league-specific baseline but applies smoothly.
+        """
+        league_base = {
+            "Premier League": 0.95,
+            "La Liga": 0.92,
+            "Bundesliga": 1.00,
+            "Serie A": 0.90,
+            "Ligue 1": 0.93,
+            "RFPL": 0.88,
+        }
+        base = league_base.get(league, 0.95)
+        total = home_goal_exp + away_goal_exp
+
+        # Only moderate damping when total > 3.5; scale smoothly with total
+        if total <= 3.5:
+            return home_goal_exp, away_goal_exp
+
+        # Soft damping factor that declines slowly with larger totals, but bounded
+        excess = total - 3.5
+        damping = base - 0.03 * min(excess, 3.0)  # reduce up to ~0.09 for +3 goals excess
+        damping = float(np.clip(damping, 0.75, 1.0))
+
+        return home_goal_exp * damping, away_goal_exp * damping
+
+    def _calculate_poisson_match_probs(self, home_lambda: float, away_lambda: float) -> Tuple[float, float, float]:
+        """
+        Compute probabilities of home win / draw / away win by summing grid of Poisson pmfs.
+        Reasonable goal limit is 0..8 for each side for completeness.
+        """
+        max_goals = 8
+        home_win = 0.0
+        draw = 0.0
+        away_win = 0.0
+
+        # Precompute pmfs for speed
+        home_pmf = [poisson.pmf(i, home_lambda) for i in range(max_goals + 1)]
+        away_pmf = [poisson.pmf(j, away_lambda) for j in range(max_goals + 1)]
+
+        for i in range(max_goals + 1):
+            for j in range(max_goals + 1):
+                p = home_pmf[i] * away_pmf[j]
                 if i > j:
-                    home_win += prob
+                    home_win += p
                 elif i == j:
-                    draw += prob
+                    draw += p
                 else:
-                    away_win += prob
-        
-        return home_win, draw, away_win
-    
-    def _calculate_injury_adjustment(self, home_injuries, away_injuries):
-        """Calculate injury impacts"""
+                    away_win += p
+
+        # Add tail mass for goals > max_goals (very small, approximate by remaining probability)
+        home_tail = 1.0 - sum(home_pmf)
+        away_tail = 1.0 - sum(away_pmf)
+        # Approximate tail: if both tails exist, distribute small amount to high-scoring outcomes (counts minimally)
+        tail_mass = home_tail * away_tail
+        away_win += tail_mass * 0.5
+        home_win += tail_mass * 0.5
+
+        return self._normalize_triple(home_win, draw, away_win)
+
+    def _calculate_injury_adjustment(self, home_injuries: str, away_injuries: str) -> Dict[str, float]:
+        """
+        Returns multipliers for attack and defense for home and away (multiplicative).
+        Accepts qualitative labels: "None", "Minor", "Moderate", "Significant", "Crisis".
+        """
         injury_weights = {
             "None": {"attack_mult": 1.00, "defense_mult": 1.00},
-            "Minor": {"attack_mult": 0.95, "defense_mult": 0.94},
-            "Moderate": {"attack_mult": 0.90, "defense_mult": 0.85},
-            "Significant": {"attack_mult": 0.82, "defense_mult": 0.72},
-            "Crisis": {"attack_mult": 0.70, "defense_mult": 0.58}
+            "Minor": {"attack_mult": 0.97, "defense_mult": 0.96},
+            "Moderate": {"attack_mult": 0.92, "defense_mult": 0.88},
+            "Significant": {"attack_mult": 0.85, "defense_mult": 0.78},
+            "Crisis": {"attack_mult": 0.75, "defense_mult": 0.65},
         }
-        
         home_adj = injury_weights.get(home_injuries, injury_weights["None"])
         away_adj = injury_weights.get(away_injuries, injury_weights["None"])
-        
         return {
-            'home_attack': home_adj['attack_mult'],
-            'home_defense': home_adj['defense_mult'],
-            'away_attack': away_adj['attack_mult'],
-            'away_defense': away_adj['defense_mult']
+            "home_attack": float(home_adj["attack_mult"]),
+            "home_defense": float(home_adj["defense_mult"]),
+            "away_attack": float(away_adj["attack_mult"]),
+            "away_defense": float(away_adj["defense_mult"]),
         }
-    
-    def _calculate_winner_confidence(self, home_win, draw, away_win, home_data, away_data):
-        """Enhanced confidence calculation"""
-        max_prob = max(home_win, draw, away_win)
-        
-        # Base confidence from probability spread
-        if max_prob > 0.6:
-            base_confidence = 80 + (max_prob - 0.6) * 100
-        elif max_prob > 0.45:
-            base_confidence = 60 + (max_prob - 0.45) * 133
-        else:
-            base_confidence = 40 + max_prob * 44
-        
-        # Adjust for team quality consistency
-        elo_diff = abs(home_data['base_quality']['elo'] - away_data['base_quality']['elo'])
-        if elo_diff > 300:
-            base_confidence += 10  # High confidence in clear favorites
-        elif elo_diff < 100:
-            base_confidence -= 5   # Lower confidence in close matches
-        
-        return min(95, base_confidence)
 
-    # Add the other enhanced prediction methods (over/under, BTTS) with similar improvements
-    def predict_over_under_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
-        """Enhanced over/under prediction"""
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
-        
-        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
-            home_team, away_team, home_xg, away_xg, home_xga, away_xga
-        )
-        
-        # Apply league damping
-        home_goal_exp, away_goal_exp = self._apply_league_damping(
-            home_goal_exp, away_goal_exp, home_data['league']
-        )
-        
-        total_goals_lambda = home_goal_exp + away_goal_exp
-        
-        # Calculate probabilities with variance adjustment
-        over_25_prob = 1 - poisson.cdf(2.5, total_goals_lambda)
-        over_15_prob = 1 - poisson.cdf(1.5, total_goals_lambda)
-        over_35_prob = 1 - poisson.cdf(3.5, total_goals_lambda)
-        
-        # Adjust based on defensive consistency
-        defense_consistency = (home_data['clean_sheet_pct'] + away_data['clean_sheet_pct']) / 200
-        consistency_adjustment = 1.0 + (0.5 - defense_consistency) * 0.4
-        
-        over_25_prob *= consistency_adjustment
-        over_25_prob = max(0.05, min(0.95, over_25_prob))
-        
-        confidence = self._calculate_over_under_confidence(total_goals_lambda, home_data, away_data)
-        
-        return {
-            'over_1.5': over_15_prob,
-            'over_2.5': over_25_prob,
-            'over_3.5': over_35_prob,
-            'under_1.5': 1 - over_15_prob,
-            'under_2.5': 1 - over_25_prob,
-            'under_3.5': 1 - over_35_prob,
-            'expected_total_goals': total_goals_lambda,
-            'confidence': confidence,
-            'key_factors': {
-                'total_goals_lambda': total_goals_lambda,
-                'defense_consistency': defense_consistency
-            }
-        }
-    
-    def predict_btts_enhanced(self, home_team, away_team, home_xg, away_xg, home_xga, away_xga):
-        """Enhanced BTTS prediction"""
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
-        
-        home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
-            home_team, away_team, home_xg, away_xg, home_xga, away_xga
-        )
-        
-        # Historical BTTS percentages
-        home_btts_historical = home_data['btts_pct'] / 100
-        away_btts_historical = away_data['btts_pct'] / 100
-        
-        # Poisson probability both teams score
-        prob_home_scores = 1 - poisson.cdf(0, home_goal_exp)
-        prob_away_scores = 1 - poisson.cdf(0, away_goal_exp)
-        poisson_btts = prob_home_scores * prob_away_scores
-        
-        # Blend historical and Poisson (60% historical, 40% current form)
-        btts_prob = 0.6 * ((home_btts_historical + away_btts_historical) / 2) + 0.4 * poisson_btts
-        
-        # Ensure reasonable bounds
-        btts_prob = max(0.1, min(0.9, btts_prob))
-        
-        confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
-        
-        return {
-            'btts_yes': btts_prob,
-            'btts_no': 1 - btts_prob,
-            'confidence': confidence,
-            'key_factors': {
-                'historical_btts': (home_btts_historical + away_btts_historical) / 2,
-                'poisson_btts': poisson_btts,
-                'blend_weight': 0.6
-            }
-        }
-    
-    def _calculate_over_under_confidence(self, total_goals, home_data, away_data):
-        """Confidence for over/under predictions"""
-        distance_from_threshold = abs(total_goals - 2.5)
-        
-        if distance_from_threshold > 1.0:
-            confidence = 80
-        elif distance_from_threshold > 0.5:
-            confidence = 70
-        elif distance_from_threshold > 0.25:
-            confidence = 60
+    # -------------------------
+    # Utility & scoring helpers
+    # -------------------------
+    @staticmethod
+    def _normalize_triple(a: float, b: float, c: float) -> Tuple[float, float, float]:
+        """Normalize three positive numbers so they sum to 1. Avoid division by zero."""
+        vals = np.array([float(a), float(b), float(c)], dtype=float)
+        vals = np.clip(vals, 0.0, None)
+        s = vals.sum()
+        if s <= 0:
+            return 1 / 3, 1 / 3, 1 / 3
+        return float(vals[0] / s), float(vals[1] / s), float(vals[2] / s)
+
+    @staticmethod
+    def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
+        """
+        Produce a dynamic Poisson weight in [0.4, 0.85].
+        If both teams have reasonable xG signals (>1.2), favor Poisson more.
+        """
+        base = 0.55
+        signal = min(home_xg, away_xg)
+        # scale: signal 0.0 -> base -0.15, signal 1.5+ -> base +0.3 (clipped)
+        w = base + (signal / 1.5) * 0.3
+        return float(np.clip(w, 0.4, 0.85))
+
+    def _calculate_winner_confidence(self, home_prob: float, draw_prob: float, away_prob: float, home_data: dict, away_data: dict) -> float:
+        """
+        Confidence scoring from spread, ELO difference, and sample size signals.
+        Returns integer 0..95 (cap).
+        """
+        max_prob = max(home_prob, draw_prob, away_prob)
+        diff = max_prob - sorted([home_prob, draw_prob, away_prob])[1]  # gap to next
+        # Base confidence from max_prob and gap
+        base = 40.0
+        base += (max_prob - 0.33) * 90.0  # if max_prob 0.6 -> +24
+        base += diff * 80.0  # reward wide gaps
+
+        # Adjust for ELO gap (bigger gap -> more confidence)
+        elo_gap = abs(home_data["base_quality"]["elo"] - away_data["base_quality"]["elo"])
+        base += min(12.0, (elo_gap / 80.0))  # up to +12 points
+
+        # Adjust for sample quality (matches played)
+        matches_home = max(1, home_data.get("matches_played", 5))
+        matches_away = max(1, away_data.get("matches_played", 5))
+        sample_factor = min(1.2, math.log10(matches_home + matches_away + 1) / 1.0)
+        base *= sample_factor
+
+        # Bound and cap
+        base = float(np.clip(base, 20.0, 95.0))
+        return base
+
+    @staticmethod
+    def _calculate_over_under_confidence(total_goals: float, home_data: dict, away_data: dict) -> float:
+        """
+        Confidence that over/under predictions are stable. Based on distance from threshold
+        and defensive consistency.
+        """
+        dist = abs(total_goals - 2.5)
+        if dist >= 1.0:
+            conf = 80.0
+        elif dist >= 0.6:
+            conf = 70.0
+        elif dist >= 0.3:
+            conf = 60.0
         else:
-            confidence = 50
-        
-        return min(95, confidence)
-    
-    def _calculate_btts_confidence(self, home_data, away_data, home_goal_exp, away_goal_exp):
-        """Confidence for BTTS predictions"""
-        # Based on how far from 50/50 and historical consistency
-        prob_both_score = (1 - poisson.cdf(0, home_goal_exp)) * (1 - poisson.cdf(0, away_goal_exp))
-        distance_from_50 = abs(prob_both_score - 0.5)
-        
-        base_confidence = 50 + distance_from_50 * 100
-        
-        return min(95, base_confidence)
+            conf = 50.0
+
+        # Slight boost if both teams have many matches played
+        matches = min(50, max(1, home_data.get("matches_played", 5) + away_data.get("matches_played", 5)))
+        conf += min(10.0, math.log(matches) * 2.0)
+        return float(np.clip(conf, 30.0, 95.0))
+
+    @staticmethod
+    def _calculate_btts_confidence(home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
+        """
+        Confidence for BTTS: based on how far the poisson estimate is from 50%-level and historical stability.
+        """
+        prob_home = 1.0 - poisson.cdf(0, home_goal_exp)
+        prob_away = 1.0 - poisson.cdf(0, away_goal_exp)
+        poisson_btts = prob_home * prob_away
+        dist = abs(poisson_btts - 0.5)
+        base = 45.0 + dist * 90.0  # large distance -> higher confidence
+        # historical consistency (clean sheet % near 50% indicates variable)
+        hist = (home_data.get("btts_pct", 50) + away_data.get("btts_pct", 50)) / 2.0
+        base += (abs(hist - 50.0) / 50.0) * 10.0
+        return float(np.clip(base, 30.0, 95.0))
