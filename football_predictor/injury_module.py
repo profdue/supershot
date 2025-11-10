@@ -52,7 +52,11 @@ class InjuryAnalyzer:
         }
 
     def apply_injury_impact(self, xg_for, xg_against, injury_level, rest_days, form_trend):
-        """Apply injury, fatigue, and form modifiers to xG for and against."""
+        """
+        Apply injury, fatigue, and form modifiers to xG for and against.
+        ✅ Attack multiplier reduces xG when attackers are missing
+        ✅ Defense multiplier now inversely applied: weaker defense → more goals conceded
+        """
         # Validate injury level
         injury_data = self.injury_weights.get(injury_level, self.injury_weights['None'])
 
@@ -65,9 +69,11 @@ class InjuryAnalyzer:
         # Form multiplier: expects form_trend roughly in [-1,0,1]
         form_mult = 1 + (form_trend * 0.2)
 
-        # Apply all modifiers
+        # Apply attack and defense modifiers
         xg_modified = xg_for * attack_mult * fatigue_mult * form_mult
-        xga_modified = xg_against * defense_mult * fatigue_mult * form_mult
+
+        # Inverse defense multiplier for realistic goal concession
+        xga_modified = xg_against / defense_mult * fatigue_mult * form_mult
 
         # Ensure minimum xG
         return max(0.1, xg_modified), max(0.1, xga_modified)
@@ -93,4 +99,3 @@ class InjuryAnalyzer:
 
         # Weighted average (defense slightly more important)
         return (0.4 * attack_diff + 0.6 * defense_diff)
-
