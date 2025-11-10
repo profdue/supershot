@@ -227,6 +227,39 @@ class ProfessionalPredictionEngine:
             self.enhanced_predictor = None
             print("✅ Prediction engine initialized (basic mode)")
         
+    # PUBLIC PROPERTIES FOR THE APP TO USE
+    @property
+    def injury_weights(self):
+        """Expose injury weights to the app"""
+        return self.injury_analyzer.injury_weights
+        
+    @property
+    def fatigue_multipliers(self):
+        """Expose fatigue multipliers to the app"""
+        return self.injury_analyzer.fatigue_multipliers
+        
+    @property
+    def league_averages(self):
+        """Expose league averages to the app"""
+        return {
+            "Premier League": {"xg": 1.45, "xga": 1.45},
+            "La Liga": {"xg": 1.38, "xga": 1.38},
+            "Bundesliga": {"xg": 1.52, "xga": 1.52},
+            "Serie A": {"xg": 1.42, "xga": 1.42},
+            "Ligue 1": {"xg": 1.40, "xga": 1.40},
+            "RFPL": {"xg": 1.35, "xga": 1.35}
+        }
+        
+    @property
+    def value_thresholds(self):
+        """Expose value thresholds to the app"""
+        return self.value_calculator.value_thresholds
+        
+    @property
+    def confidence_weights(self):
+        """Expose confidence weights to the app"""
+        return self.confidence_calculator.confidence_weights
+        
     def get_team_data(self, team_key):
         """Get comprehensive team data with all updates integrated"""
         return self.data_integrator.get_comprehensive_team_data(team_key)
