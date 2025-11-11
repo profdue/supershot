@@ -22,6 +22,9 @@ class ConfidenceCalculator:
             home_data, away_data, inputs
         )
         
+        # 🚨 CRITICAL FIX: Use the actual probabilities from the enhanced predictor
+        # Not the raw inputs that might be causing issues
+        
         # Outcome-specific adjustments
         home_win_confidence = self._calculate_win_confidence(
             probabilities['home_win'], context_confidence, home_data, away_data, 'home'
@@ -83,108 +86,99 @@ class ConfidenceCalculator:
     def _calculate_win_confidence(self, win_probability, context_confidence, team_data, opponent_data, side):
         """Calculate confidence for a win outcome"""
         
-        # Base confidence from probability strength
+        # 🚨 CRITICAL FIX: Proper probability-based confidence scaling
         if win_probability > 0.70:
-            prob_confidence = 80 + (win_probability - 0.70) * 50  # 80-95%
-        elif win_probability > 0.50:
-            prob_confidence = 65 + (win_probability - 0.50) * 75  # 65-80%
-        elif win_probability > 0.30:
-            prob_confidence = 50 + (win_probability - 0.30) * 75  # 50-65%
-        elif win_probability > 0.15:
-            prob_confidence = 40 + (win_probability - 0.15) * 67  # 40-50%
+            prob_confidence = 80 + (win_probability - 0.70) * 30  # 80-89% (reduced range)
+        elif win_probability > 0.55:
+            prob_confidence = 65 + (win_probability - 0.55) * 40  # 65-75%
+        elif win_probability > 0.40:
+            prob_confidence = 55 + (win_probability - 0.40) * 33  # 55-65%
+        elif win_probability > 0.25:
+            prob_confidence = 45 + (win_probability - 0.25) * 40  # 45-55%
         else:
-            prob_confidence = 30 + win_probability * 67  # 30-40%
+            prob_confidence = 35 + win_probability * 40  # 35-45%
         
-        # 🚨 FIX: Reduce confidence for unrealistic predictions based on team quality
+        # 🚨 FIX: More aggressive confidence reduction for unrealistic predictions
         team_tier = team_data['base_quality']['structural_tier']
         opponent_tier = opponent_data['base_quality']['structural_tier']
         team_elo = team_data['base_quality']['elo']
         opponent_elo = opponent_data['base_quality']['elo']
         
-        # Lower confidence if weak team is heavily favored over strong team
-        if team_tier == 'weak' and opponent_tier == 'strong' and win_probability > 0.6:
+        # Calculate realistic probability based on ELO difference
+        elo_diff = team_elo - opponent_elo
+        if side == 'home':
+            elo_diff += 100  # Home advantage
+        
+        realistic_prob = 1 / (1 + 10 ** (-elo_diff / 400))
+        probability_gap = abs(win_probability - realistic_prob)
+        
+        # 🚨 MAJOR FIX: Reduce confidence based on probability-reality gap
+        if probability_gap > 0.15:
+            reduction = min(0.5, probability_gap * 2)  # Up to 50% reduction
+            prob_confidence = max(25, prob_confidence * (1 - reduction))
+            print(f"🔍 CONFIDENCE ADJUSTMENT: Probability-reality gap {probability_gap:.2f}. Reducing confidence by {int(reduction*100)}%")
+        
+        # Additional quality-based sanity checks
+        if team_tier == 'weak' and opponent_tier == 'strong' and win_probability > 0.5:
+            reduction_factor = 0.5  # 50% reduction
+            print(f"🔍 CONFIDENCE ADJUSTMENT: Weak team favored over strong team. Reducing confidence by {int((1-reduction_factor)*100)}%")
+            prob_confidence = max(25, prob_confidence * reduction_factor)
+        
+        if team_tier == 'elite' and opponent_tier != 'elite' and win_probability < 0.4:
             reduction_factor = 0.6  # 40% reduction
-            print(f"🔍 CONFIDENCE ADJUSTMENT: Weak team heavily favored over strong team. Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(30, prob_confidence * reduction_factor)
-        
-        # Lower confidence if strong team is underdog against weak team  
-        if team_tier == 'strong' and opponent_tier == 'weak' and win_probability < 0.4:
-            reduction_factor = 0.7  # 30% reduction
-            print(f"🔍 CONFIDENCE ADJUSTMENT: Strong team underdog against weak team. Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(30, prob_confidence * reduction_factor)
-        
-        # 🚨 NEW: Reduce confidence for elite teams being underdogs against non-elite teams
-        if team_tier == 'elite' and opponent_tier != 'elite' and win_probability < 0.45:
-            reduction_factor = 0.65  # 35% reduction
             print(f"🔍 CONFIDENCE ADJUSTMENT: Elite team underdog against non-elite. Reducing confidence by {int((1-reduction_factor)*100)}%")
             prob_confidence = max(25, prob_confidence * reduction_factor)
         
-        # Team quality adjustment
-        elo_diff = team_elo - opponent_elo
-        if side == 'home':
-            elo_diff += 100  # Home advantage in ELO terms
-        
-        if abs(elo_diff) > 300:
-            # High confidence in clear favorites/underdogs
-            if (elo_diff > 0 and win_probability > 0.5) or (elo_diff < 0 and win_probability < 0.3):
-                prob_confidence += 8
-            else:
-                prob_confidence -= 5
-        elif abs(elo_diff) < 100:
-            # Lower confidence in close matches
-            prob_confidence -= 3
-        
-        # Form trend adjustment
+        # Form trend adjustment (smaller impact)
         form_trend = team_data['form_trend']
         if form_trend > 0.05 and win_probability > 0.4:
-            prob_confidence += 4
+            prob_confidence += 2
         elif form_trend < -0.05 and win_probability > 0.4:
-            prob_confidence -= 4
+            prob_confidence -= 2
         
-        # Blend with context confidence (70% probability-based, 30% context)
-        final_confidence = 0.7 * prob_confidence + 0.3 * context_confidence
+        # 🚨 FIX: Better blending with context (context should have less influence)
+        final_confidence = 0.8 * prob_confidence + 0.2 * context_confidence
         
-        return min(95, max(25, final_confidence))
+        return min(90, max(25, final_confidence))
 
     def _calculate_draw_confidence(self, draw_probability, context_confidence, home_data, away_data):
         """Calculate confidence for draw outcome"""
         
-        # Draw confidence is highest when probabilities are balanced
-        balance_confidence = 1.0 - abs((home_data['base_quality']['elo'] - away_data['base_quality']['elo']) / 1000)
-        balance_confidence = max(0.3, min(0.8, balance_confidence))
-        
-        # Probability-based confidence for draws
+        # 🚨 CRITICAL FIX: Draw confidence should be much more conservative
         if draw_probability > 0.35:
-            prob_confidence = 60 + (draw_probability - 0.35) * 50  # 60-80%
+            prob_confidence = 55 + (draw_probability - 0.35) * 30  # 55-64%
         elif draw_probability > 0.25:
-            prob_confidence = 50 + (draw_probability - 0.25) * 50  # 50-60%
+            prob_confidence = 45 + (draw_probability - 0.25) * 40  # 45-55%
         elif draw_probability > 0.15:
-            prob_confidence = 40 + (draw_probability - 0.15) * 50  # 40-50%
+            prob_confidence = 35 + (draw_probability - 0.15) * 50  # 35-45%
         else:
-            prob_confidence = 30 + draw_probability * 67  # 30-40%
+            prob_confidence = 25 + draw_probability * 67  # 25-35%
         
-        # Draws are more likely when teams are closely matched
-        elo_diff = abs(home_data['base_quality']['elo'] - away_data['base_quality']['elo'])
-        if elo_diff < 150:
-            prob_confidence += 5
-        elif elo_diff > 300:
-            prob_confidence -= 8
+        # 🚨 FIX: Draws are inherently less predictable - reduce confidence
+        prob_confidence *= 0.9  # 10% reduction for draw uncertainty
         
-        # 🚨 FIX: Reduce confidence for unrealistic draw probabilities
+        # Team quality mismatch adjustment
         home_tier = home_data['base_quality']['structural_tier']
         away_tier = away_data['base_quality']['structural_tier']
         
         # Lower confidence if elite vs weak teams have high draw probability
-        if (home_tier == 'elite' and away_tier == 'weak' and draw_probability > 0.3) or \
-           (away_tier == 'elite' and home_tier == 'weak' and draw_probability > 0.3):
-            reduction_factor = 0.7  # 30% reduction
+        if (home_tier == 'elite' and away_tier == 'weak' and draw_probability > 0.25) or \
+           (away_tier == 'elite' and home_tier == 'weak' and draw_probability > 0.25):
+            reduction_factor = 0.6  # 40% reduction
             print(f"🔍 DRAW CONFIDENCE ADJUSTMENT: Unlikely draw scenario (elite vs weak). Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(30, prob_confidence * reduction_factor)
+            prob_confidence = max(20, prob_confidence * reduction_factor)
         
-        # Blend with context confidence
-        final_confidence = 0.6 * prob_confidence + 0.4 * context_confidence
+        # ELO difference adjustment
+        elo_diff = abs(home_data['base_quality']['elo'] - away_data['base_quality']['elo'])
+        if elo_diff < 100:  # Close match
+            prob_confidence += 5
+        elif elo_diff > 250:  # Mismatch
+            prob_confidence -= 10
         
-        return min(90, max(25, final_confidence))
+        # 🚨 FIX: Context has even less influence on draw confidence
+        final_confidence = 0.85 * prob_confidence + 0.15 * context_confidence
+        
+        return min(80, max(20, final_confidence))
 
     def _calculate_team_consistency(self, team_data):
         """Calculate team performance consistency"""
@@ -229,13 +223,52 @@ class ConfidenceCalculator:
         else:  # weak
             return 0.7
 
+    # 🚨 NEW METHOD: Calculate goal market confidence
+    def calculate_goal_market_confidence(self, total_goals, probability, market_type="over_2.5"):
+        """Calculate confidence for goal markets based on probability strength"""
+        
+        # 🚨 CRITICAL: Goal market confidence should scale with probability
+        if market_type == "over_1.5":
+            if probability > 0.85:
+                confidence = 80 + (probability - 0.85) * 20  # 80-84%
+            elif probability > 0.70:
+                confidence = 70 + (probability - 0.70) * 33  # 70-75%
+            elif probability > 0.55:
+                confidence = 60 + (probability - 0.55) * 33  # 60-65%
+            else:
+                confidence = 50 + (probability - 0.40) * 50  # 50-60%
+                
+        elif market_type == "over_2.5":
+            if probability > 0.75:
+                confidence = 75 + (probability - 0.75) * 20  # 75-79%
+            elif probability > 0.60:
+                confidence = 65 + (probability - 0.60) * 33  # 65-70%
+            elif probability > 0.45:
+                confidence = 55 + (probability - 0.45) * 33  # 55-60%
+            else:
+                confidence = 45 + (probability - 0.30) * 33  # 45-50%
+                
+        else:  # over_3.5
+            if probability > 0.60:
+                confidence = 70 + (probability - 0.60) * 25  # 70-75%
+            elif probability > 0.45:
+                confidence = 60 + (probability - 0.45) * 33  # 60-65%
+            elif probability > 0.30:
+                confidence = 50 + (probability - 0.30) * 33  # 50-55%
+            else:
+                confidence = 40 + (probability - 0.15) * 33  # 40-45%
+        
+        # Adjust based on total goals expectation
+        if total_goals > 4.0:
+            confidence += 5  # Higher confidence for extreme totals
+        elif total_goals < 2.0:
+            confidence += 3  # Higher confidence for low totals
+        
+        return min(85, max(35, confidence))
+
     # For backward compatibility
     def calculate_confidence(self, home_xg, away_xg, home_xga, away_xga, inputs):
         """Legacy method - calculates overall match confidence"""
-        # This might be what's causing the static confidence issue
-        # If your engine is calling this, it needs to be updated
-        
-        # For now, return a reasonable default
         home_data = inputs.get('home_data', {})
         away_data = inputs.get('away_data', {})
         
