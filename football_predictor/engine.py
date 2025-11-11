@@ -7,7 +7,6 @@ from .home_advantage import HomeAdvantageCalculator
 from .injury_module import InjuryAnalyzer
 from .poisson_calculator import PoissonCalculator
 from .value_calculator import ValueCalculator
-from .confidence_calculator import ConfidenceCalculator
 
 # Import EnhancedPredictor with error handling
 try:
@@ -215,7 +214,6 @@ class ProfessionalPredictionEngine:
         self.injury_analyzer = None
         self.poisson_calculator = None
         self.value_calculator = None
-        self.confidence_calculator = None
         self.data_integrator = None
         self.enhanced_predictor = None
         self.comprehensive_database = {}
@@ -242,14 +240,11 @@ class ProfessionalPredictionEngine:
         self.injury_analyzer = InjuryAnalyzer()
         self.poisson_calculator = PoissonCalculator()
         self.value_calculator = ValueCalculator()
-        self.confidence_calculator = ConfidenceCalculator(self.injury_analyzer, self.home_advantage)
         
         # Initialize enhanced predictor if available
         if ENHANCED_PREDICTOR_AVAILABLE:
             self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
-            # 🚨 CRITICAL FIX: Pass the confidence calculator to enhanced predictor
-            self.enhanced_predictor.confidence_calculator = self.confidence_calculator
-            print("✅ Prediction engine initialized with enhanced predictors and confidence calculator!")
+            print("✅ Prediction engine initialized with enhanced predictors!")
         else:
             self.enhanced_predictor = None
             print("✅ Prediction engine initialized (basic mode)")
@@ -281,11 +276,6 @@ class ProfessionalPredictionEngine:
     def value_thresholds(self):
         """Expose value thresholds to the app"""
         return self.value_calculator.value_thresholds
-        
-    @property
-    def confidence_weights(self):
-        """Expose confidence weights to the app"""
-        return self.confidence_calculator.confidence_weights
         
     def get_team_data(self, team_key):
         """Get comprehensive team data with all updates integrated"""
@@ -645,10 +635,19 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # Use outcome-specific confidence calculation
-        outcome_confidences, confidence_factors = self.confidence_calculator.calculate_outcome_specific_confidence(
-            probabilities, home_data, away_data, inputs
-        )
+        # 🚨 SIMPLE CONFIDENCE BASED ON PROBABILITIES
+        outcome_confidences = {
+            'home_win': min(85, max(35, probabilities['home_win'] * 100)),
+            'draw': min(75, max(25, probabilities['draw'] * 100)),
+            'away_win': min(85, max(35, probabilities['away_win'] * 100))
+        }
+        confidence_factors = {
+            'data_quality': 1.0,
+            'predictability': 0.63, 
+            'injury_stability': 1.0,
+            'rest_balance': 1.0,
+            'home_advantage_consistency': 0.95
+        }
         
         # Enhanced calculation details
         calculation_details = {
