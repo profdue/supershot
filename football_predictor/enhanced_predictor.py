@@ -8,6 +8,10 @@ class EnhancedPredictor:
     """
     Enhanced predictor with COMPLETE SEPARATION of goal counting (pure xG) and win probabilities (blended).
     ELO only influences who wins, not how many goals are scored.
+
+    Usage:
+        predictor = EnhancedPredictor(data_integrator)
+        out = predictor.predict_winner_enhanced(home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries)
     """
 
     def __init__(self, data_integrator):
@@ -222,7 +226,13 @@ class EnhancedPredictor:
         btts_prob = blend_weight_hist * historical_avg + (1 - blend_weight_hist) * poisson_btts
         btts_prob = float(np.clip(btts_prob, 0.05, 0.95))
 
-        confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
+        # 🚨 USE THE NEW BTTS CONFIDENCE METHOD
+        if self.confidence_calculator and hasattr(self.confidence_calculator, 'calculate_btts_confidence'):
+            confidence = self.confidence_calculator.calculate_btts_confidence(
+                btts_prob, home_data, away_data, home_goal_exp, away_goal_exp
+            )
+        else:
+            confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
 
         return {
             "btts_yes": round(btts_prob, 4),
@@ -464,7 +474,9 @@ class EnhancedPredictor:
             return 45
 
     def _calculate_btts_confidence(self, home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
-        """Confidence for BTTS."""
+        """
+        Confidence for BTTS - LEGACY METHOD (used if new method not available)
+        """
         prob_home = 1.0 - poisson.cdf(0, home_goal_exp)
         prob_away = 1.0 - poisson.cdf(0, away_goal_exp)
         poisson_btts = prob_home * prob_away
