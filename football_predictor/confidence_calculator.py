@@ -95,8 +95,32 @@ class ConfidenceCalculator:
         else:
             prob_confidence = 30 + win_probability * 67  # 30-40%
         
+        # 🚨 FIX: Reduce confidence for unrealistic predictions based on team quality
+        team_tier = team_data['base_quality']['structural_tier']
+        opponent_tier = opponent_data['base_quality']['structural_tier']
+        team_elo = team_data['base_quality']['elo']
+        opponent_elo = opponent_data['base_quality']['elo']
+        
+        # Lower confidence if weak team is heavily favored over strong team
+        if team_tier == 'weak' and opponent_tier == 'strong' and win_probability > 0.6:
+            reduction_factor = 0.6  # 40% reduction
+            print(f"🔍 CONFIDENCE ADJUSTMENT: Weak team heavily favored over strong team. Reducing confidence by {int((1-reduction_factor)*100)}%")
+            prob_confidence = max(30, prob_confidence * reduction_factor)
+        
+        # Lower confidence if strong team is underdog against weak team  
+        if team_tier == 'strong' and opponent_tier == 'weak' and win_probability < 0.4:
+            reduction_factor = 0.7  # 30% reduction
+            print(f"🔍 CONFIDENCE ADJUSTMENT: Strong team underdog against weak team. Reducing confidence by {int((1-reduction_factor)*100)}%")
+            prob_confidence = max(30, prob_confidence * reduction_factor)
+        
+        # 🚨 NEW: Reduce confidence for elite teams being underdogs against non-elite teams
+        if team_tier == 'elite' and opponent_tier != 'elite' and win_probability < 0.45:
+            reduction_factor = 0.65  # 35% reduction
+            print(f"🔍 CONFIDENCE ADJUSTMENT: Elite team underdog against non-elite. Reducing confidence by {int((1-reduction_factor)*100)}%")
+            prob_confidence = max(25, prob_confidence * reduction_factor)
+        
         # Team quality adjustment
-        elo_diff = team_data['base_quality']['elo'] - opponent_data['base_quality']['elo']
+        elo_diff = team_elo - opponent_elo
         if side == 'home':
             elo_diff += 100  # Home advantage in ELO terms
         
@@ -145,6 +169,17 @@ class ConfidenceCalculator:
             prob_confidence += 5
         elif elo_diff > 300:
             prob_confidence -= 8
+        
+        # 🚨 FIX: Reduce confidence for unrealistic draw probabilities
+        home_tier = home_data['base_quality']['structural_tier']
+        away_tier = away_data['base_quality']['structural_tier']
+        
+        # Lower confidence if elite vs weak teams have high draw probability
+        if (home_tier == 'elite' and away_tier == 'weak' and draw_probability > 0.3) or \
+           (away_tier == 'elite' and home_tier == 'weak' and draw_probability > 0.3):
+            reduction_factor = 0.7  # 30% reduction
+            print(f"🔍 DRAW CONFIDENCE ADJUSTMENT: Unlikely draw scenario (elite vs weak). Reducing confidence by {int((1-reduction_factor)*100)}%")
+            prob_confidence = max(30, prob_confidence * reduction_factor)
         
         # Blend with context confidence
         final_confidence = 0.6 * prob_confidence + 0.4 * context_confidence
