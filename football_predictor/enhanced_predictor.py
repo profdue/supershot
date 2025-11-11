@@ -26,15 +26,11 @@ class EnhancedPredictor:
         else:
             correct_key = f"{base_name} Away"
         
-        # Debug info
-        print(f"🔍 ENHANCED PREDICTOR: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
-        
         data = self.data_integrator.get_comprehensive_team_data(correct_key)
         
         # Fallback if specific home/away data not found
         if data is None or data.get('xg_total', 0) == 0:
             fallback_key = f"{base_name} Home"  # Default to home data
-            print(f"⚠️  ENHANCED PREDICTOR: Using fallback data for {correct_key} -> {fallback_key}")
             data = self.data_integrator.get_comprehensive_team_data(fallback_key)
             
         return data
@@ -46,10 +42,10 @@ class EnhancedPredictor:
         self,
         home_team: str,
         away_team: str,
-        home_xg: float,
-        away_xg: float,
-        home_xga: float,
-        away_xga: float,
+        home_xg: float,      # ← NOW PER MATCH values (FIXED)
+        away_xg: float,      # ← NOW PER MATCH values (FIXED)
+        home_xga: float,     # ← NOW PER MATCH values (FIXED)
+        away_xga: float,     # ← NOW PER MATCH values (FIXED)
         home_injuries: str = "None",
         away_injuries: str = "None",
     ) -> Dict[str, Any]:
@@ -62,22 +58,27 @@ class EnhancedPredictor:
         away_data = self._get_correct_team_data(away_team, is_home=False)
         league = home_data.get("league", away_data.get("league", "Premier League"))
 
-        # Debug team data
-        print(f"🔍 ENHANCED PREDICTOR - Home: {home_data['base_name']} - xG: {home_data['xg_per_match']:.2f}, Location: {home_data.get('location', 'unknown')}")
-        print(f"🔍 ENHANCED PREDICTOR - Away: {away_data['base_name']} - xG: {away_data['xg_per_match']:.2f}, Location: {away_data.get('location', 'unknown')}")
+        print(f"🔍 ENHANCED PREDICTOR - Home: {home_data['base_name']} - Input xG: {home_xg:.2f}, Base xG: {home_data['xg_per_match']:.2f}")
+        print(f"🔍 ENHANCED PREDICTOR - Away: {away_data['base_name']} - Input xG: {away_xg:.2f}, Base xG: {away_data['xg_per_match']:.2f}")
 
         # 1) compute base expected goals (apply quality + home advantage)
         home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
 
+        print(f"🔍 ENHANCED PREDICTOR - Base goals: Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}")
+
         # 2) apply injury adjustments to goal expectancies (attack multipliers)
         inj_adj = self._calculate_injury_adjustment(home_injuries, away_injuries)
         home_goal_exp *= inj_adj["home_attack"]
         away_goal_exp *= inj_adj["away_attack"]
 
+        print(f"🔍 ENHANCED PREDICTOR - After injuries: Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}")
+
         # 3) apply league soft damping if totals are high
         home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
+
+        print(f"🔍 ENHANCED PREDICTOR - Final goals: Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}, Total: {home_goal_exp + away_goal_exp:.2f}")
 
         # 4) Poisson-based probabilities
         poisson_home_win, poisson_draw, poisson_away_win = self._calculate_poisson_match_probs(
@@ -87,7 +88,7 @@ class EnhancedPredictor:
         # 5) ELO-based probabilities
         elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
 
-        # 6) 🚨 CRITICAL FIX: Dynamic blending weights with enhanced quality adjustment
+        # 6) 🚨 CRITICAL FIX: Improved dynamic blending weights
         poisson_weight = self._compute_dynamic_poisson_weight(home_xg, away_xg)
         
         # 🚨 ENHANCED: Apply quality-based adjustment to reduce Poisson weight for elite teams
@@ -126,10 +127,10 @@ class EnhancedPredictor:
         self,
         home_team: str,
         away_team: str,
-        home_xg: float,
-        away_xg: float,
-        home_xga: float,
-        away_xga: float,
+        home_xg: float,      # ← NOW PER MATCH values (FIXED)
+        away_xg: float,      # ← NOW PER MATCH values (FIXED)
+        home_xga: float,     # ← NOW PER MATCH values (FIXED)
+        away_xga: float,     # ← NOW PER MATCH values (FIXED)
     ) -> Dict[str, Any]:
         """
         Predicts over/under markets (1.5, 2.5, 3.5). Returns probabilities, expected total, and confidence.
@@ -146,6 +147,8 @@ class EnhancedPredictor:
         # Apply soft damping and no injuries here (this function expects adjusted inputs if needed)
         home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
         total_lambda = home_goal_exp + away_goal_exp
+
+        print(f"🔍 OVER/UNDER - Total lambda: {total_lambda:.2f}")
 
         # Use integer cdf values: Over 2.5 = 1 - P(X <= 2)
         over_15 = 1.0 - poisson.cdf(1, total_lambda)
@@ -178,10 +181,10 @@ class EnhancedPredictor:
         self,
         home_team: str,
         away_team: str,
-        home_xg: float,
-        away_xg: float,
-        home_xga: float,
-        away_xga: float,
+        home_xg: float,      # ← NOW PER MATCH values (FIXED)
+        away_xg: float,      # ← NOW PER MATCH values (FIXED)
+        home_xga: float,     # ← NOW PER MATCH values (FIXED)
+        away_xga: float,     # ← NOW PER MATCH values (FIXED)
     ) -> Dict[str, Any]:
         """
         Predict BTTS (both teams to score) using Poisson and historical BTTS blend.
@@ -259,10 +262,10 @@ class EnhancedPredictor:
         self,
         home_team: str,
         away_team: str,
-        home_xg: float,
-        away_xg: float,
-        home_xga: float,
-        away_xga: float,
+        home_xg: float,      # ← NOW PER MATCH values (FIXED)
+        away_xg: float,      # ← NOW PER MATCH values (FIXED)
+        home_xga: float,     # ← NOW PER MATCH values (FIXED)
+        away_xga: float,     # ← NOW PER MATCH values (FIXED)
     ) -> Tuple[float, float]:
         """
         Calculate quality-adjusted expected goals for each side based on integrated metrics.
@@ -273,6 +276,7 @@ class EnhancedPredictor:
 
         # Avoid division by zero
         league_avg = max(0.1, league_avg)
+        
         # Base adjustment: scale by opponent defensive xGA relative to league average, and by attack strength
         home_goal_exp = max(0.01, home_xg * (away_xga / league_avg) * float(home_data.get("attack_strength", 1.0)))
         away_goal_exp = max(0.01, away_xg * (home_xga / league_avg) * float(away_data.get("attack_strength", 1.0)))
@@ -364,22 +368,22 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
-    # 🚨 CRITICAL FIX: Enhanced weight adjustment methods
+    # 🚨 CRITICAL FIX: Improved weight adjustment methods
     @staticmethod
     def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
         """
-        🚨 FIXED: Produce a dynamic Poisson weight in [0.3, 0.65] - REDUCED RANGE
-        Give more weight to Elo for quality differentiation
+        🚨 IMPROVED: Produce a dynamic Poisson weight in [0.4, 0.7] - BETTER RANGE
+        More balanced approach between Poisson and ELO
         """
-        base = 0.45  # REDUCED from 0.55
+        base = 0.55  # Better base weight
         signal = min(home_xg, away_xg)
-        # scale: signal 0.0 -> base -0.15, signal 1.5+ -> base +0.2 (REDUCED)
-        w = base + (signal / 1.5) * 0.2  # REDUCED multiplier
-        return float(np.clip(w, 0.3, 0.65))  # REDUCED range
+        # scale: signal 0.0 -> base -0.15, signal 1.5+ -> base +0.15
+        w = base + (signal / 1.5) * 0.15  # More reasonable multiplier
+        return float(np.clip(w, 0.4, 0.7))  # Better range
 
     def _compute_quality_adjusted_weight(self, home_data: dict, away_data: dict, base_weight: float) -> float:
         """
-        🚨 ENHANCED: Reduce Poisson weight when there's a big quality difference
+        🚨 IMPROVED: More reasonable quality adjustments
         """
         home_tier = home_data['base_quality']['structural_tier']
         away_tier = away_data['base_quality']['structural_tier']
@@ -388,49 +392,25 @@ class EnhancedPredictor:
         
         total_reduction = 0.0
         
-        # 🚨 ENHANCED: Reduce Poisson weight for elite vs strong/weak teams
+        # 🚨 IMPROVED: More reasonable reduction for elite teams
         if (home_tier == 'elite' and away_tier != 'elite') or (away_tier == 'elite' and home_tier != 'elite'):
-            elite_reduction = 0.35  # Increased from 0.30 to 0.35
+            elite_reduction = 0.25  # Reduced from 0.35 to 0.25
             total_reduction += elite_reduction
-            print(f"🔍 QUALITY ADJUSTMENT: Elite team detected. Reducing Poisson weight by {int(elite_reduction*100)}%")
         
-        # 🚨 ENHANCED: Additional reduction for very large ELO differences (>200)
+        # 🚨 IMPROVED: More reasonable ELO difference adjustment
         elo_diff = abs(home_elo - away_elo)
         if elo_diff > 200:
-            elo_reduction = min(0.25, (elo_diff - 200) / 800)  # Up to 25% additional reduction
+            elo_reduction = min(0.15, (elo_diff - 200) / 1000)  # Reduced maximum
             total_reduction += elo_reduction
-            print(f"🔍 ELO ADJUSTMENT: Large ELO difference {elo_diff}. Reducing Poisson weight by {elo_reduction:.1%}")
         
-        # 🚨 NEW: Additional reduction for injury mismatches
-        home_injury_severity = self._get_injury_severity(home_data.get('injury_level', 'None'))
-        away_injury_severity = self._get_injury_severity(away_data.get('injury_level', 'None'))
-        injury_diff = abs(home_injury_severity - away_injury_severity)
-        
-        if injury_diff >= 2:  # Significant injury mismatch
-            injury_reduction = 0.10
-            total_reduction += injury_reduction
-            print(f"🔍 INJURY ADJUSTMENT: Significant injury mismatch. Reducing Poisson weight by {int(injury_reduction*100)}%")
-        
-        # Apply total reduction (capped at 60% maximum reduction)
-        max_reduction = 0.60
+        # Apply total reduction (capped at 40% maximum reduction - much more reasonable)
+        max_reduction = 0.40
         total_reduction = min(total_reduction, max_reduction)
         
         if total_reduction > 0:
-            print(f"🔍 TOTAL WEIGHT ADJUSTMENT: Reducing Poisson weight by {int(total_reduction*100)}% (from {base_weight:.3f} to {base_weight * (1 - total_reduction):.3f})")
             return base_weight * (1 - total_reduction)
         
         return base_weight
-
-    def _get_injury_severity(self, injury_level: str) -> int:
-        """Convert injury level to severity score"""
-        severity_map = {
-            "None": 0,
-            "Minor": 1, 
-            "Moderate": 2,
-            "Significant": 3,
-            "Crisis": 4
-        }
-        return severity_map.get(injury_level, 0)
 
     # -------------------------
     # Utility & scoring helpers
