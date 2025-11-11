@@ -4,19 +4,23 @@ from typing import Dict, Tuple, Any
 
 class ConfidenceCalculator:
     """
-    Revised ConfidenceCalculator
+    ConfidenceCalculator — Corrected, consistent, hybrid confidence model.
 
-    Key changes (vs previous implementation):
-    - Confidence is now a measure of *certainty* about a probability estimate (not a re-scaling
-      of the probability itself).
-    - Uses information-theoretic base (binary entropy) to map probability -> base certainty.
-    - Applies a single, interpretable reliability factor derived from context (data quality,
-      predictability, injuries, rest, home-adv consistency) instead of additive "boosts".
-    - Removes forced "predicted winner must have highest confidence" rule.
-    - Keeps separate logic for BTTS/goal market confidence but uses consistent scaling and
-      context-adjustment.
-    - API-compatible: calculate_outcome_specific_confidence returns a dict of confidences
-      and the context factors (same as before).
+    Key features:
+    - Separates and computes three related metrics:
+      1) Outcome distribution sharpness (entropy-based) — how clear the winner is.
+      2) Context reliability (data quality, predictability, injuries, rest, home adv) — how trustworthy inputs are.
+      3) Outcome-specific confidences derived from each outcome's probability certainty combined with context reliability.
+
+    - Does NOT use forced boosts or arbitrary caps that disconnect probabilities and confidence.
+    - Returns:
+        - outcome_confidences: dict of per-outcome confidences (0-100)
+        - metrics: dict with distribution_sharpness_pct, context_reliability_pct, overall_confidence_pct and factors
+
+    Interpretation guidance (recommended):
+    - overall_confidence_pct = distribution_sharpness_pct * context_reliability_pct / 100
+      This measures how much to *trust the most likely outcome*. Low when distribution is flat or data is poor.
+    - outcome_confidences show per-outcome certainty (relative to other outcomes) scaled by data reliability.
     """
 
     def __init__(self, injury_analyzer=None, home_advantage=None, debug: bool = False):
@@ -24,7 +28,7 @@ class ConfidenceCalculator:
         self.home_advantage = home_advantage
         self.debug = debug
 
-        # Confidence weights (interpretable and tunable)
+        # Interpret-able weights for context reliability (sum should be 1.0 but not required)
         self.confidence_weights = {
             'data_quality': 0.18,
             'predictability': 0.18,
@@ -33,220 +37,153 @@ class ConfidenceCalculator:
             'home_advantage_consistency': 0.30
         }
 
-    # --------- Public API -------------------------------------------------
+    # ---------------- Public API -----------------------------------------
     def calculate_outcome_specific_confidence(
         self,
         probabilities: Dict[str, float],
         home_data: Dict[str, Any],
         away_data: Dict[str, Any],
         inputs: Dict[str, Any]
-    ) -> Tuple[Dict[str, float], Dict[str, float]]:
-        """Return outcome-specific confidence percentages (0-100) and context factors.
+    ) -> Tuple[Dict[str, float], Dict[str, Any]]:
+        """Compute per-outcome confidences and context metrics.
 
-        probabilities expects keys: 'home_win', 'draw', 'away_win' with values in [0,1].
+        probabilities: {'home_win': p1, 'draw': p2, 'away_win': p3} (values in [0,1], sum ~1)
+
+        Returns: (outcome_confidences, metrics)
+          - outcome_confidences: dict outcome -> confidence % (0..100)
+          - metrics: contains distribution_sharpness_pct, context_reliability_pct, overall_confidence_pct, factors
         """
-        # Compute contextual reliability and factors (0..1 scale for factors)
-        context_confidence_pct, factors = self._calculate_context_confidence(home_data, away_data, inputs)
-        context_reliability = context_confidence_pct / 100.0  # convert to 0..1
+        # 1) validate and normalize probabilities
+        probs = {k: float(max(0.0, min(1.0, v))) for k, v in probabilities.items()}
+        total = sum(probs.values())
+        if total <= 0:
+            # fallback to equal probs
+            probs = {k: 1.0 / len(probs) for k in probs}
+            total = 1.0
+        probs = {k: v / total for k, v in probs.items()}
 
-        if self.debug:
-            print(f"🔍 CONTEXT CONFIDENCE: {context_confidence_pct:.1f}%")
+        # 2) compute entropy-based distribution sharpness (0..1)
+        distribution_sharpness = self._distribution_sharpness(list(probs.values()))
 
-        # Convert each raw probability -> base certainty via entropy mapping
-        base_certs = {
-            k: self._probability_to_certainty(v)
-            for k, v in probabilities.items()
+        # 3) compute context reliability (0..1) and factors
+        context_reliability, factors = self._context_reliability_and_factors(home_data, away_data, inputs)
+
+        # 4) overall match-level confidence (0..100)
+        overall_confidence_pct = round(distribution_sharpness * context_reliability * 100.0, 1)
+
+        # 5) per-outcome confidence: map individual probability -> certainty and scale by context reliability
+        outcome_confidences = {}
+        for outcome, p in probs.items():
+            certainty = self._probability_to_certainty(p)  # 0..1
+            conf_pct = round(certainty * context_reliability * 100.0, 1)
+            # draw uncertainty: draws are inherently more volatile — optional light penalty
+            if outcome == 'draw':
+                conf_pct *= 0.95
+                conf_pct = round(conf_pct, 1)
+            outcome_confidences[outcome] = conf_pct
+
+        metrics = {
+            'distribution_sharpness_pct': round(distribution_sharpness * 100.0, 1),
+            'context_reliability_pct': round(context_reliability * 100.0, 1),
+            'overall_confidence_pct': overall_confidence_pct,
+            'factors': factors,
+            'normalized_probabilities': probs
         }
 
         if self.debug:
-            for k, v in probabilities.items():
-                print(f"🔍 BASE: {k} prob={v:.3f} -> certainty={base_certs[k]:.2f}")
+            print("DEBUG: probs=", probs)
+            print("DEBUG: distribution_sharpness=", metrics['distribution_sharpness_pct'])
+            print("DEBUG: context_reliability=", metrics['context_reliability_pct'])
+            print("DEBUG: overall_confidence=", metrics['overall_confidence_pct'])
+            print("DEBUG: outcome_confidences=", outcome_confidences)
 
-        # Combine base certainty with context reliability
-        # Use a weighted mix: final = alpha * base_cert + (1-alpha) * (context_reliability*100)
-        # alpha controls how much the probability itself drives the confidence. 0.6 is a reasonable default.
-        alpha = 0.6
+        return outcome_confidences, metrics
 
-        outcome_confidences = {}
-        for outcome, base_cert in base_certs.items():
-            # Draws tend to be less certain even at the same probability; apply draw_penalty
-            draw_penalty = 0.85 if outcome == 'draw' else 1.0
-
-            final = alpha * base_cert * 100.0 * draw_penalty + (1 - alpha) * (context_reliability * 100.0)
-
-            # Small adjustments for extremely low information (very small sample)
-            # If data_quality factor is low (<0.4), reduce confidence further
-            data_quality = factors.get('data_quality', 1.0)
-            if data_quality < 0.4:
-                final *= 0.85
-
-            # Boundaries: allow 5..95 to avoid hard caps used previously; output is 0..100 but
-            # we keep a conservative floor/ceiling.
-            final = max(5.0, min(95.0, final))
-
-            outcome_confidences[outcome] = round(final, 1)
-
-        if self.debug:
-            print(f"🔍 FINAL CONFIDENCES: {outcome_confidences}")
-
-        return outcome_confidences, factors
-
-    # --------- Helpers ----------------------------------------------------
+    # ---------------- Internal helpers ----------------------------------
     @staticmethod
     def _probability_to_certainty(p: float) -> float:
-        """Map a probability p in [0,1] to a certainty score in [0,1].
+        """Map a single probability p to a certainty in [0,1] using normalized binary entropy.
 
-        Uses normalized binary entropy: certainty = 1 - H(p)/H(0.5), where
-        H(p) = -p log2 p - (1-p) log2 (1-p); H(0.5) = 1 bit. The result is 0 at p=0.5
-        (maximum uncertainty) and approaches 1 as p->0 or p->1.
+        - p = 0.5 -> certainty 0 (max uncertainty)
+        - p -> 0 or 1 -> certainty -> 1 (max certainty)
         """
-        # clamp p away from 0/1 for numerical stability
         p = max(1e-9, min(1 - 1e-9, float(p)))
         entropy = -(p * math.log2(p) + (1 - p) * math.log2(1 - p))
-        # H(0.5) = 1.0, so normalized certainty is 1 - entropy
+        # For a binary outcome, H_max = 1 bit. Normalized certainty = 1 - H(p)/1.
         certainty = 1.0 - entropy
-        # certainty in [0,1]
         return max(0.0, min(1.0, certainty))
 
-    def calculate_goal_market_confidence(self, total_goals: float, probability: float, market_type: str = "over_2.5") -> float:
-        """Return a 0..100 confidence for goal markets using consistent scaling + context.
+    @staticmethod
+    def _distribution_sharpness(probs: list) -> float:
+        """Compute sharpness of a distribution with n outcomes.
 
-        This implementation preserves the user's previous thresholds but returns values
-        that are comparable to the outcome-specific confidences and keeps a consistent
-        floor/ceiling.
+        Returns value in [0,1]: 0 = uniform (max uncertainty), 1 = one outcome has prob 1.
+        Uses normalized Shannon entropy: sharpness = 1 - H(probs)/H_uniform
         """
-        # Base mapping by thresholds (kept similar to the old logic but returned as 0..100)
-        prob = probability
-        if market_type == "over_1.5":
-            if prob >= 0.90:
-                conf = 82
-            elif prob >= 0.80:
-                conf = 75
-            elif prob >= 0.65:
-                conf = 68
-            elif prob >= 0.50:
-                conf = 60
-            else:
-                conf = 50
-        elif market_type == "over_2.5":
-            if prob >= 0.80:
-                conf = 78
-            elif prob >= 0.70:
-                conf = 72
-            elif prob >= 0.55:
-                conf = 65
-            elif prob >= 0.40:
-                conf = 58
-            else:
-                conf = 48
-        else:  # over_3.5
-            if prob >= 0.70:
-                conf = 75
-            elif prob >= 0.60:
-                conf = 68
-            elif prob >= 0.45:
-                conf = 60
-            elif prob >= 0.30:
-                conf = 52
-            else:
-                conf = 42
+        probs = [max(1e-12, min(1.0, float(p))) for p in probs]
+        total = sum(probs)
+        if total <= 0:
+            return 0.0
+        probs = [p / total for p in probs]
 
-        # small adjustment by total goals expectation
-        if total_goals > 4.0 and prob > 0.6:
-            conf += 3
-        elif total_goals < 2.0 and prob < 0.4:
-            conf += 2
+        entropy = -sum(p * math.log2(p) for p in probs)
+        max_entropy = math.log2(len(probs))
+        if max_entropy <= 0:
+            return 1.0
+        sharpness = 1.0 - (entropy / max_entropy)
+        return max(0.0, min(1.0, sharpness))
 
-        # enforce conservative bounds
-        conf = max(10, min(95, conf))
-        return round(conf, 1)
+    def _context_reliability_and_factors(self, home_data: Dict[str, Any], away_data: Dict[str, Any], inputs: Dict[str, Any]) -> Tuple[float, Dict[str, float]]:
+        """Compute a 0..1 reliability measure and return the component factors.
 
-    def calculate_btts_confidence(self, btts_probability: float, home_data: Dict[str, Any], away_data: Dict[str, Any], home_goal_exp: float = None, away_goal_exp: float = None) -> float:
-        """Return BTTS confidence (0..100).
-
-        Uses distance-from-0.5 signal strength but applies historical consistency and
-        context reliability.
-        """
-        p = float(btts_probability)
-        distance = abs(p - 0.5)
-
-        # signal mapping (0..1)
-        if distance > 0.25:
-            base = 0.90
-        elif distance > 0.15:
-            base = 0.80
-        elif distance > 0.08:
-            base = 0.65
-        elif distance > 0.03:
-            base = 0.50
-        else:
-            base = 0.35
-
-        # historical consistency adjustment
-        hist_home = home_data.get("btts_pct", 50) / 100.0
-        hist_away = away_data.get("btts_pct", 50) / 100.0
-        hist_avg = (hist_home + hist_away) / 2.0
-        if abs(hist_avg - p) > 0.2:
-            base *= 0.85
-
-        # context reliability
-        # re-use context computation to get a reliability factor
-        # (note: this is slightly heavier but keeps consistency)
-        _, factors = self._calculate_context_confidence(home_data, away_data, {
-            'home_injuries': 'None', 'away_injuries': 'None', 'home_rest': 0, 'away_rest': 0
-        })
-        reliability = factors.get('data_quality', 1.0) * 0.6 + factors.get('predictability', 1.0) * 0.4
-
-        conf = base * reliability * 100.0
-        conf = max(10.0, min(95.0, conf))
-        if self.debug:
-            print(f"🔍 BTTS: p={p:.2f} dist={distance:.3f} base={base:.2f} hist_avg={hist_avg:.2f} reliability={reliability:.2f} -> conf={conf:.1f}")
-        return round(conf, 1)
-
-    # --------- Context / internal calculators -----------------------------
-    def _calculate_context_confidence(self, home_data: Dict[str, Any], away_data: Dict[str, Any], inputs: Dict[str, Any]) -> Tuple[float, Dict[str, float]]:
-        """Calculate overall match context confidence (percentage) and return component factors.
-
-        Returned factors are in 0..1
+        Factors returned in 0..1 range (data_quality, predictability, injury_stability, rest_balance, home_adv_consistency)
         """
         factors: Dict[str, float] = {}
 
+        # Data quality: at least 1 match; cap at 5 for full quality
         home_matches = max(1, int(home_data.get('matches_played', 5)))
         away_matches = max(1, int(away_data.get('matches_played', 5)))
         data_quality = min(home_matches / 5.0, away_matches / 5.0, 1.0)
-        factors['data_quality'] = data_quality
+        factors['data_quality'] = round(data_quality, 3)
 
-        home_consistency = self._calculate_team_consistency(home_data)
-        away_consistency = self._calculate_team_consistency(away_data)
-        predictability = (home_consistency + away_consistency) / 2.0
-        factors['predictability'] = predictability
+        # Predictability: derived from team consistency
+        home_cons = self._calculate_team_consistency(home_data)
+        away_cons = self._calculate_team_consistency(away_data)
+        predictability = (home_cons + away_cons) / 2.0
+        factors['predictability'] = round(predictability, 3)
 
+        # Injury stability: map injury labels to numbers
         injury_stability = self._calculate_injury_stability(inputs.get('home_injuries', 'None'), inputs.get('away_injuries', 'None'))
-        factors['injury_stability'] = injury_stability
+        factors['injury_stability'] = round(injury_stability, 3)
 
+        # Rest balance
         rest_balance = self._calculate_rest_balance(inputs.get('home_rest', 0), inputs.get('away_rest', 0))
-        factors['rest_balance'] = rest_balance
+        factors['rest_balance'] = round(rest_balance, 3)
 
+        # Home advantage consistency
         home_adv_consistency = self._calculate_home_advantage_consistency(home_data)
-        factors['home_advantage_consistency'] = home_adv_consistency
+        factors['home_advantage_consistency'] = round(home_adv_consistency, 3)
 
-        # Weighted context confidence (0..1) converted to percent
-        ctx = (
-            factors['data_quality'] * self.confidence_weights['data_quality'] +
-            factors['predictability'] * self.confidence_weights['predictability'] +
-            factors['injury_stability'] * self.confidence_weights['injury_stability'] +
-            factors['rest_balance'] * self.confidence_weights['rest_balance'] +
-            factors['home_advantage_consistency'] * self.confidence_weights['home_advantage_consistency']
+        # Weighted combination -> reliability
+        weights = self.confidence_weights
+        reliability = (
+            factors['data_quality'] * weights['data_quality'] +
+            factors['predictability'] * weights['predictability'] +
+            factors['injury_stability'] * weights['injury_stability'] +
+            factors['rest_balance'] * weights['rest_balance'] +
+            factors['home_advantage_consistency'] * weights['home_advantage_consistency']
         )
+        reliability = max(0.0, min(1.0, reliability))
 
-        context_confidence_pct = max(10.0, min(95.0, ctx * 100.0))
-        return context_confidence_pct, factors
+        return reliability, factors
 
+    # ---------------- Small helpers -------------------------------------
     def _calculate_team_consistency(self, team_data: Dict[str, Any]) -> float:
         clean_pct = team_data.get('clean_sheet_pct', 45) / 100.0
         btts_pct = team_data.get('btts_pct', 50)
         btts_consistency = 1.0 - abs(btts_pct - 50.0) / 50.0
-        return max(0.0, min(1.0, (clean_pct + btts_consistency) / 2.0))
+        val = (clean_pct + btts_consistency) / 2.0
+        return max(0.0, min(1.0, val))
 
     def _calculate_injury_stability(self, home_injuries: str, away_injuries: str) -> float:
         impact = {
@@ -276,9 +213,9 @@ class ConfidenceCalculator:
         else:
             return 0.7
 
-    # backward compatible helper
+    # backward compatibility
     def calculate_confidence(self, home_xg, away_xg, home_xga, away_xga, inputs):
         home_data = inputs.get('home_data', {})
         away_data = inputs.get('away_data', {})
-        context_confidence, factors = self._calculate_context_confidence(home_data, away_data, inputs)
+        context_confidence, factors = self._context_reliability_and_factors(home_data, away_data, inputs)
         return context_confidence, factors
