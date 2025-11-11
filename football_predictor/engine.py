@@ -222,7 +222,7 @@ class ProfessionalPredictionEngine:
         self._initialize_engine()
         
     def _initialize_engine(self):
-        """Initialize all components with proper data integration"""
+        """Initialize all components with proper data integration - FIXED"""
         print("🚀 Initializing Professional Prediction Engine...")
         
         # Load all data
@@ -247,7 +247,9 @@ class ProfessionalPredictionEngine:
         # Initialize enhanced predictor if available
         if ENHANCED_PREDICTOR_AVAILABLE:
             self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
-            print("✅ Prediction engine initialized with enhanced predictors!")
+            # 🚨 CRITICAL FIX: Pass the confidence calculator to enhanced predictor
+            self.enhanced_predictor.confidence_calculator = self.confidence_calculator
+            print("✅ Prediction engine initialized with enhanced predictors and confidence calculator!")
         else:
             self.enhanced_predictor = None
             print("✅ Prediction engine initialized (basic mode)")
