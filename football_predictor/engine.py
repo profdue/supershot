@@ -222,7 +222,7 @@ class ProfessionalPredictionEngine:
         self._initialize_engine()
         
     def _initialize_engine(self):
-        """Initialize all components with proper data integration - FIXED"""
+        """Initialize all components with proper data integration"""
         print("🚀 Initializing Professional Prediction Engine...")
         
         # Load all data
@@ -231,29 +231,22 @@ class ProfessionalPredictionEngine:
         if not self.data or any(v is None for v in self.data.values()):
             raise Exception("Failed to load required data files")
             
-        # Initialize confidence calculator FIRST
-        self.confidence_calculator = ConfidenceCalculator(None, None)
-        
-        # Initialize data integrator
+        # Initialize data integrator FIRST
         self.data_integrator = DataIntegrator(self)
         self.data_integrator.integrate_all_data()
         self.comprehensive_database = self.data_integrator.comprehensive_database
             
-        # Initialize other analyzers with integrated data
+        # Initialize analyzers with integrated data
         self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
         self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
         self.injury_analyzer = InjuryAnalyzer()
         self.poisson_calculator = PoissonCalculator()
         self.value_calculator = ValueCalculator()
-        
-        # 🚨 CRITICAL FIX: Re-initialize confidence calculator with proper dependencies
         self.confidence_calculator = ConfidenceCalculator(self.injury_analyzer, self.home_advantage)
         
         # Initialize enhanced predictor if available
         if ENHANCED_PREDICTOR_AVAILABLE:
             self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
-            # 🚨 CRITICAL FIX: Pass the confidence calculator to enhanced predictor
-            self.enhanced_predictor.confidence_calculator = self.confidence_calculator
             print("✅ Prediction engine initialized with enhanced predictors!")
         else:
             self.enhanced_predictor = None
