@@ -247,6 +247,8 @@ class ProfessionalPredictionEngine:
         # Initialize enhanced predictor if available
         if ENHANCED_PREDICTOR_AVAILABLE:
             self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
+            # 🚨 CRITICAL FIX: Pass the confidence calculator to enhanced predictor
+            self.enhanced_predictor.confidence_calculator = self.confidence_calculator
             print("✅ Prediction engine initialized with enhanced predictors!")
         else:
             self.enhanced_predictor = None
