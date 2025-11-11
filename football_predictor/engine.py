@@ -385,6 +385,24 @@ class ProfessionalPredictionEngine:
         print(f"🔍 SANITY CHECK: {home_data['base_name']} ({home_tier}, ELO {home_elo}) vs {away_data['base_name']} ({away_tier}, ELO {away_elo})")
         print(f"🔍 Before sanity: Home {home_win_prob:.1%}, Away {away_win_prob:.1%}")
         
+        # 🚨 NEW SANITY CHECK: Elite teams should rarely be underdogs against non-elite teams
+        if (home_tier == 'elite' and away_tier != 'elite' and away_win_prob > home_win_prob) or \
+           (away_tier == 'elite' and home_tier != 'elite' and home_win_prob > away_win_prob):
+            print(f"🚨 SANITY: Elite team as underdog. Forcing correction.")
+            if home_tier == 'elite':
+                home_win_prob = max(home_win_prob, 0.45)  # Elite teams min 45% chance
+                away_win_prob = min(away_win_prob, 0.40)
+            else:
+                away_win_prob = max(away_win_prob, 0.45)
+                home_win_prob = min(home_win_prob, 0.40)
+            
+            # Re-normalize with draw probability
+            draw_prob = result['probabilities']['draw']
+            total = home_win_prob + draw_prob + away_win_prob
+            result['probabilities']['home_win'] = home_win_prob / total
+            result['probabilities']['away_win'] = away_win_prob / total
+            result['probabilities']['draw'] = draw_prob / total
+        
         # Sanity check 1: Weak teams shouldn't be heavy favorites over strong teams
         if (home_tier == 'weak' and away_tier == 'strong' and home_win_prob > 0.6) or \
            (away_tier == 'weak' and home_tier == 'strong' and away_win_prob > 0.6):
