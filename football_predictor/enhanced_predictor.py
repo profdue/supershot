@@ -8,10 +8,6 @@ class EnhancedPredictor:
     """
     Enhanced predictor with COMPLETE SEPARATION of goal counting (pure xG) and win probabilities (blended).
     ELO only influences who wins, not how many goals are scored.
-
-    Usage:
-        predictor = EnhancedPredictor(data_integrator)
-        out = predictor.predict_winner_enhanced(home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries)
     """
 
     def __init__(self, data_integrator):
@@ -169,10 +165,16 @@ class EnhancedPredictor:
         over_15 = float(np.clip(over_15 * consistency_factor, 0.02, 0.995))
         over_35 = float(np.clip(over_35 * consistency_factor, 0.01, 0.95))
 
-        # 🚨 CRITICAL FIX: Use probability-based confidence for each market
-        confidence_15 = self._calculate_over_under_confidence(total_lambda, over_15, "over_1.5")
-        confidence_25 = self._calculate_over_under_confidence(total_lambda, over_25, "over_2.5")
-        confidence_35 = self._calculate_over_under_confidence(total_lambda, over_35, "over_3.5")
+        # 🚨 CRITICAL FIX: Use the enhanced confidence calculator
+        if self.confidence_calculator:
+            confidence_15 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_15, "over_1.5")
+            confidence_25 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_25, "over_2.5")
+            confidence_35 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_35, "over_3.5")
+        else:
+            # Fallback to basic confidence
+            confidence_15 = self._calculate_over_under_confidence(total_lambda, over_15, "over_1.5")
+            confidence_25 = self._calculate_over_under_confidence(total_lambda, over_25, "over_2.5")
+            confidence_35 = self._calculate_over_under_confidence(total_lambda, over_35, "over_3.5")
 
         # Use over_2.5 as the main confidence for backward compatibility
         confidence = confidence_25
@@ -226,7 +228,7 @@ class EnhancedPredictor:
         btts_prob = blend_weight_hist * historical_avg + (1 - blend_weight_hist) * poisson_btts
         btts_prob = float(np.clip(btts_prob, 0.05, 0.95))
 
-        # 🚨 USE THE NEW BTTS CONFIDENCE METHOD
+        # 🚨 USE THE ENHANCED CONFIDENCE CALCULATOR
         if self.confidence_calculator and hasattr(self.confidence_calculator, 'calculate_btts_confidence'):
             confidence = self.confidence_calculator.calculate_btts_confidence(
                 btts_prob, home_data, away_data, home_goal_exp, away_goal_exp
@@ -411,13 +413,9 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
-    # 🚨 CRITICAL FIX: Updated confidence methods
+    # 🚨 UPDATED CONFIDENCE METHODS - Now use the enhanced calculator when available
     def _calculate_over_under_confidence(self, total_goals: float, probability: float, market_type: str = "over_2.5") -> float:
-        """🚨 FIXED: Calculate confidence for over/under markets"""
-        if self.confidence_calculator and hasattr(self.confidence_calculator, 'calculate_goal_market_confidence'):
-            return self.confidence_calculator.calculate_goal_market_confidence(total_goals, probability, market_type)
-        
-        # Fallback with consistent ranges
+        """Fallback confidence calculation if enhanced calculator not available"""
         if market_type == "over_1.5":
             if probability >= 0.90: return 82
             elif probability >= 0.80: return 75
@@ -438,12 +436,12 @@ class EnhancedPredictor:
             else: return 42
 
     def _calculate_winner_confidence(self, home_prob: float, draw_prob: float, away_prob: float, home_data: dict, away_data: dict) -> float:
-        """🚨 FIXED: Calculate winner confidence"""
-        # If we have the confidence calculator, use it properly
+        """Calculate winner confidence - uses enhanced calculator when available"""
+        # If we have the enhanced confidence calculator, use it properly
         if self.confidence_calculator:
             # Create a mock inputs dict for the confidence calculator
             mock_inputs = {
-                'home_injuries': 'None',
+                'home_injuries': 'None',  # These would be set by the engine
                 'away_injuries': 'None',
                 'home_rest': 7,
                 'away_rest': 7
@@ -475,7 +473,7 @@ class EnhancedPredictor:
 
     def _calculate_btts_confidence(self, home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
         """
-        Confidence for BTTS - LEGACY METHOD (used if new method not available)
+        Confidence for BTTS - LEGACY METHOD (used if enhanced calculator not available)
         """
         prob_home = 1.0 - poisson.cdf(0, home_goal_exp)
         prob_away = 1.0 - poisson.cdf(0, away_goal_exp)
