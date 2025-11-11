@@ -87,12 +87,14 @@ class EnhancedPredictor:
         # 5) ELO-based probabilities
         elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
 
-        # 6) Dynamic blending weights (more xG signal -> higher Poisson weight)
+        # 6) 🚨 CRITICAL FIX: Dynamic blending weights with quality adjustment
         poisson_weight = self._compute_dynamic_poisson_weight(home_xg, away_xg)
         
         # 🚨 FIXED: Apply quality-based adjustment to reduce Poisson weight for elite teams
         poisson_weight = self._compute_quality_adjusted_weight(home_data, away_data, poisson_weight)
         elo_weight = 1.0 - poisson_weight
+
+        print(f"🔍 WEIGHTING - Poisson: {poisson_weight:.3f}, Elo: {elo_weight:.3f}")
 
         home_prob = poisson_weight * poisson_home_win + elo_weight * elo_home_win
         draw_prob = poisson_weight * poisson_draw + elo_weight * elo_draw
@@ -350,8 +352,8 @@ class EnhancedPredictor:
             "None": {"attack_mult": 1.00, "defense_mult": 1.00},
             "Minor": {"attack_mult": 0.97, "defense_mult": 0.96},
             "Moderate": {"attack_mult": 0.92, "defense_mult": 0.88},
-            "Significant": {"attack_mult": 0.85, "defense_mult": 0.78},
-            "Crisis": {"attack_mult": 0.75, "defense_mult": 0.65},
+            "Significant": {"attack_mult": 0.85, "defense_mult": 0.82},
+            "Crisis": {"attack_mult": 0.75, "defense_mult": 0.72},
         }
         home_adj = injury_weights.get(home_injuries, injury_weights["None"])
         away_adj = injury_weights.get(away_injuries, injury_weights["None"])
@@ -362,7 +364,7 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
-    # 🚨 FIXED: Critical weight adjustment methods
+    # 🚨 CRITICAL FIX: Weight adjustment methods
     @staticmethod
     def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
         """
