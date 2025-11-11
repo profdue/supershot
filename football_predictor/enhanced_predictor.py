@@ -89,6 +89,9 @@ class EnhancedPredictor:
 
         # 6) Dynamic blending weights (more xG signal -> higher Poisson weight)
         poisson_weight = self._compute_dynamic_poisson_weight(home_xg, away_xg)
+        
+        # 🚨 FIXED: Apply quality-based adjustment to reduce Poisson weight for elite teams
+        poisson_weight = self._compute_quality_adjusted_weight(home_data, away_data, poisson_weight)
         elo_weight = 1.0 - poisson_weight
 
         home_prob = poisson_weight * poisson_home_win + elo_weight * elo_home_win
@@ -359,6 +362,42 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
+    # 🚨 FIXED: Critical weight adjustment methods
+    @staticmethod
+    def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
+        """
+        🚨 FIXED: Produce a dynamic Poisson weight in [0.3, 0.65] - REDUCED RANGE
+        Give more weight to Elo for quality differentiation
+        """
+        base = 0.45  # REDUCED from 0.55
+        signal = min(home_xg, away_xg)
+        # scale: signal 0.0 -> base -0.15, signal 1.5+ -> base +0.2 (REDUCED)
+        w = base + (signal / 1.5) * 0.2  # REDUCED multiplier
+        return float(np.clip(w, 0.3, 0.65))  # REDUCED range
+
+    def _compute_quality_adjusted_weight(self, home_data: dict, away_data: dict, base_weight: float) -> float:
+        """
+        🚨 NEW: Reduce Poisson weight when there's a big quality difference
+        """
+        home_tier = home_data['base_quality']['structural_tier']
+        away_tier = away_data['base_quality']['structural_tier']
+        home_elo = home_data['base_quality']['elo']
+        away_elo = away_data['base_quality']['elo']
+        
+        # Reduce Poisson weight for elite vs strong/weak teams
+        if (home_tier == 'elite' and away_tier != 'elite') or (away_tier == 'elite' and home_tier != 'elite'):
+            print(f"🔍 QUALITY ADJUSTMENT: Elite team detected. Reducing Poisson weight by 30%")
+            return base_weight * 0.7  # 30% reduction for elite teams
+        
+        # Additional reduction for very large ELO differences (>200)
+        elo_diff = abs(home_elo - away_elo)
+        if elo_diff > 200:
+            reduction = min(0.2, (elo_diff - 200) / 1000)  # Up to 20% additional reduction
+            print(f"🔍 ELO ADJUSTMENT: Large ELO difference {elo_diff}. Reducing Poisson weight by {reduction:.1%}")
+            return base_weight * (1 - reduction)
+        
+        return base_weight
+
     # -------------------------
     # Utility & scoring helpers
     # -------------------------
@@ -371,18 +410,6 @@ class EnhancedPredictor:
         if s <= 0:
             return 1 / 3, 1 / 3, 1 / 3
         return float(vals[0] / s), float(vals[1] / s), float(vals[2] / s)
-
-    @staticmethod
-    def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
-        """
-        Produce a dynamic Poisson weight in [0.4, 0.85].
-        If both teams have reasonable xG signals (>1.2), favor Poisson more.
-        """
-        base = 0.55
-        signal = min(home_xg, away_xg)
-        # scale: signal 0.0 -> base -0.15, signal 1.5+ -> base +0.3 (clipped)
-        w = base + (signal / 1.5) * 0.3
-        return float(np.clip(w, 0.4, 0.85))
 
     def _calculate_winner_confidence(self, home_prob: float, draw_prob: float, away_prob: float, home_data: dict, away_data: dict) -> float:
         """
