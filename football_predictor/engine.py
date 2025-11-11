@@ -434,6 +434,28 @@ class ProfessionalPredictionEngine:
         
         return insights
 
+    def _get_correct_team_data(self, team_key, is_home):
+        """✅ FIXED: Get correct home/away team data based on context"""
+        base_name = self.get_team_base_name(team_key)
+        
+        if is_home:
+            correct_key = f"{base_name} Home"
+        else:
+            correct_key = f"{base_name} Away"
+        
+        # Debug info
+        print(f"🔍 TEAM DATA: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
+        
+        data = self.get_team_data(correct_key)
+        
+        # Fallback if specific home/away data not found
+        if data is None or data.get('xg_total', 0) == 0:
+            fallback_key = f"{base_name} Home"  # Default to home data
+            print(f"⚠️  Using fallback data for {correct_key} -> {fallback_key}")
+            data = self.get_team_data(fallback_key)
+            
+        return data
+
     def predict_match_enhanced(self, inputs):
         """Enhanced prediction with better accuracy for winner, over/under, BTTS"""
         # Validate team selection
@@ -441,11 +463,15 @@ class ProfessionalPredictionEngine:
         if validation_errors:
             return None, validation_errors, []
         
-        # Get team data
-        home_data = self.get_team_data(inputs['home_team'])
-        away_data = self.get_team_data(inputs['away_team'])
+        # ✅ FIXED: Get correct home/away team data
+        home_data = self._get_correct_team_data(inputs['home_team'], is_home=True)
+        away_data = self._get_correct_team_data(inputs['away_team'], is_home=False)
         
-        # Calculate per-match averages
+        # Debug team data
+        print(f"🔍 Home Team: {home_data['base_name']} - xG: {home_data['xg_per_match']:.2f}, Location: {home_data.get('location', 'unknown')}")
+        print(f"🔍 Away Team: {away_data['base_name']} - xG: {away_data['xg_per_match']:.2f}, Location: {away_data.get('location', 'unknown')}")
+        
+        # Calculate per-match averages from user inputs (these override the base data)
         home_xg_per_match = inputs['home_xg_total'] / 5
         home_xga_per_match = inputs['home_xga_total'] / 5
         away_xg_per_match = inputs['away_xg_total'] / 5
@@ -556,7 +582,8 @@ class ProfessionalPredictionEngine:
             'key_factors_over_under': over_under_prediction['key_factors'],
             'key_factors_btts': btts_prediction['key_factors'],
             'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions',
-            'outcome_specific_confidences': outcome_confidences  # Include the new confidence scores
+            'outcome_specific_confidences': outcome_confidences,  # Include the new confidence scores
+            'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
         
         # Combine all predictions
