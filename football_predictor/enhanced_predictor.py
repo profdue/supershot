@@ -8,10 +8,6 @@ class EnhancedPredictor:
     """
     Enhanced predictor with COMPLETE SEPARATION of goal counting (pure xG) and win probabilities (blended).
     ELO only influences who wins, not how many goals are scored.
-
-    Usage:
-        predictor = EnhancedPredictor(data_integrator)
-        out = predictor.predict_winner_enhanced(home_team, away_team, home_xg, away_xg, home_xga, away_xga, home_injuries, away_injuries)
     """
 
     def __init__(self, data_integrator):
@@ -407,53 +403,37 @@ class EnhancedPredictor:
 
     # 🚨 CRITICAL FIX: Updated confidence methods
     def _calculate_over_under_confidence(self, total_goals: float, probability: float, market_type: str = "over_2.5") -> float:
-        """
-        🚨 FIXED: Calculate confidence for over/under markets based on PROBABILITY STRENGTH
-        """
-        # Use the new confidence calculator if available
-        if self.confidence_calculator:
+        """🚨 FIXED: Calculate confidence for over/under markets"""
+        if self.confidence_calculator and hasattr(self.confidence_calculator, 'calculate_goal_market_confidence'):
             return self.confidence_calculator.calculate_goal_market_confidence(total_goals, probability, market_type)
         
-        # Fallback: probability-based confidence
+        # Fallback with consistent ranges
         if market_type == "over_1.5":
-            if probability > 0.85:
-                return 78
-            elif probability > 0.70:
-                return 68
-            elif probability > 0.55:
-                return 58
-            else:
-                return 48
-                
+            if probability >= 0.90: return 82
+            elif probability >= 0.80: return 75
+            elif probability >= 0.65: return 68
+            elif probability >= 0.50: return 60
+            else: return 50
         elif market_type == "over_2.5":
-            if probability > 0.75:
-                return 76
-            elif probability > 0.60:
-                return 66
-            elif probability > 0.45:
-                return 56
-            else:
-                return 46
-                
+            if probability >= 0.80: return 78
+            elif probability >= 0.70: return 72
+            elif probability >= 0.55: return 65
+            elif probability >= 0.40: return 58
+            else: return 48
         else:  # over_3.5
-            if probability > 0.60:
-                return 72
-            elif probability > 0.45:
-                return 62
-            elif probability > 0.30:
-                return 52
-            else:
-                return 42
+            if probability >= 0.70: return 75
+            elif probability >= 0.60: return 68
+            elif probability >= 0.45: return 60
+            elif probability >= 0.30: return 52
+            else: return 42
 
     def _calculate_winner_confidence(self, home_prob: float, draw_prob: float, away_prob: float, home_data: dict, away_data: dict) -> float:
-        """
-        🚨 FIXED: Calculate winner confidence - use context if available, otherwise fallback
-        """
+        """🚨 FIXED: Calculate winner confidence"""
         # If we have the confidence calculator, use it properly
         if self.confidence_calculator:
             # Create a mock inputs dict for the confidence calculator
             mock_inputs = {
-                'home_injuries': 'None',  # These would come from actual inputs
+                'home_injuries': 'None',
                 'away_injuries': 'None',
                 'home_rest': 7,
                 'away_rest': 7
@@ -483,11 +463,8 @@ class EnhancedPredictor:
         else:
             return 45
 
-    @staticmethod
-    def _calculate_btts_confidence(home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
-        """
-        Confidence for BTTS.
-        """
+    def _calculate_btts_confidence(self, home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
+        """Confidence for BTTS."""
         prob_home = 1.0 - poisson.cdf(0, home_goal_exp)
         prob_away = 1.0 - poisson.cdf(0, away_goal_exp)
         poisson_btts = prob_home * prob_away
