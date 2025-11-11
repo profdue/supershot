@@ -305,9 +305,9 @@ class ProfessionalPredictionEngine:
         home_data = self.get_team_data(home_team)
         away_data = self.get_team_data(away_team)
         
-        # Use integrated home advantage data
-        home_boost = home_data['home_advantage']['goals_boost']
-        away_penalty = -away_data['home_advantage']['goals_boost'] * 0.5
+        # Use integrated home advantage data - calculate from performance_difference
+        home_boost = home_data['home_advantage']['ppg_diff'] * 0.33  # Convert PPG to goals
+        away_penalty = -away_data['home_advantage']['ppg_diff'] * 0.33 * 0.5  # Half penalty for away
         
         # Use league averages from integrated data
         league_avg_xg = self.data_integrator._get_league_avg_xg(league)
