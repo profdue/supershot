@@ -90,15 +90,6 @@ st.markdown("""
         margin: 0.5rem 0;
         color: #004085;
     }
-    .understat-format {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 0.5rem;
-        border-radius: 5px;
-        font-family: monospace;
-        font-weight: bold;
-        text-align: center;
-    }
     .contradiction-flag {
         background: linear-gradient(135deg, #ff6b6b 0%, #ffa8a8 100%);
         color: white;
@@ -241,6 +232,15 @@ st.markdown("""
         display: inline-block;
         margin-left: 0.5rem;
     }
+    .data-source-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        margin-left: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -260,10 +260,6 @@ def get_default_inputs():
     return {
         'home_team': 'Arsenal Home',
         'away_team': 'Brighton Away',
-        'home_xg_total': 10.25,
-        'home_xga_total': 1.75,
-        'away_xg_total': 8.75,
-        'away_xga_total': 10.60,
         'home_injuries': 'None',
         'away_injuries': 'None',
         'home_rest': 7,
@@ -275,7 +271,7 @@ def get_default_inputs():
     }
 
 def display_enhanced_team_info(engine, team_key, is_home=True):
-    """✅ FIXED: Display enhanced team information using integrated data"""
+    """Display enhanced team information using integrated data"""
     team_data = engine.get_team_data(team_key)
     base_name = team_data['base_name']
     
@@ -288,14 +284,12 @@ def display_enhanced_team_info(engine, team_key, is_home=True):
     trend_emoji = "↗️" if team_data['form_trend'] > 0.02 else "↘️" if team_data['form_trend'] < -0.02 else "➡️"
     st.write(f"**Form Trend:** {trend_emoji} {team_data['form_trend']:.3f}")
     
-    # ✅ FIXED: Only show home advantage for home teams, show away performance for away teams
+    # Home advantage for home teams, away performance for away teams
     if is_home:
-        # Home team: show home advantage
         home_adv = team_data['home_advantage']
         advantage_class = f"{home_adv['strength']}-advantage"
         st.write(f"**Home Advantage:** <span class='advantage-indicator {advantage_class}'>{home_adv['strength'].upper()}</span> (+{home_adv['goals_boost']:.3f} goals)", unsafe_allow_html=True)
     else:
-        # Away team: show away performance context
         location = team_data.get('location', 'away')
         away_performance = "Good" if team_data['xg_per_match'] > 1.4 else "Average" if team_data['xg_per_match'] > 1.0 else "Poor"
         st.write(f"**Away Performance:** <span class='advantage-indicator moderate-advantage'>{away_performance.upper()}</span> ({team_data['xg_per_match']:.2f} xG/match)", unsafe_allow_html=True)
@@ -304,13 +298,16 @@ def display_enhanced_team_info(engine, team_key, is_home=True):
     quality = team_data['base_quality']
     st.write(f"**Team Quality:** {quality['structural_tier'].title()} (Elo: {quality['elo']})")
     
-    # Performance metrics
-    st.write(f"**Last {team_data['matches_played']} matches:** {team_data['xg_total']:.2f} xG, {team_data['xga_total']:.2f} xGA")
+    # Performance metrics - NOW USING INTEGRATED DATA
+    st.write(f"**Last {team_data['matches_played']} matches:** {team_data['xg_total']:.2f} xG, {team_data['xga_total']:.2f} xGA <span class='data-source-badge'>AUTO DATA</span>", unsafe_allow_html=True)
     st.write(f"**Clean Sheets:** {team_data['clean_sheet_pct']}% | **BTTS:** {team_data['btts_pct']}%")
     st.write(f"**Goal Difference:** {team_data['goal_difference']:+d}")
+    
+    # Show xG per match metrics
+    st.write(f"**xG per match:** {team_data['xg_per_match']:.2f} | **xGA per match:** {team_data['xga_per_match']:.2f}")
 
-def display_understat_input_form(engine):
-    """ENHANCED: Display the main input form with all improvements"""
+def display_input_form(engine):
+    """Display the main input form WITHOUT manual xG inputs"""
     st.markdown('<div class="main-header">🎯 Professional Football Prediction Engine</div>', unsafe_allow_html=True)
     
     # CRITICAL DISCLAIMER
@@ -399,7 +396,7 @@ def display_understat_input_form(engine):
             key="away_team_input"
         )
         
-        # ✅ FIXED: Display away team info correctly (is_home=False)
+        # Display away team info correctly
         display_enhanced_team_info(engine, away_team, False)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -408,102 +405,6 @@ def display_understat_input_form(engine):
     if validation_errors:
         for error in validation_errors:
             st.error(f"🚫 {error}")
-    
-    st.markdown('<div class="section-header">📊 Understat Last 5 Matches Data</div>', unsafe_allow_html=True)
-    
-    # Understat Format Explanation
-    st.markdown("""
-    <div class="warning-box">
-    <strong>📝 Understat Format Guide:</strong><br>
-    Enter data in the format shown on Understat.com: <strong>"10.25-1.75"</strong><br>
-    - <strong>First number</strong>: Total xG scored in last 5 matches<br>
-    - <strong>Second number</strong>: Total xGA conceded in last 5 matches<br>
-    <strong>Note:</strong> Using context-specific home/away data for maximum accuracy
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Understat Data Inputs
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown('<div class="input-card">', unsafe_allow_html=True)
-        home_base = engine.get_team_base_name(home_team)
-        st.subheader(f"📈 {home_base} - Last 5 HOME Matches")
-        
-        # Understat format display
-        current_home_format = f"{current_inputs['home_xg_total']}-{current_inputs['home_xga_total']}"
-        st.markdown(f'<div class="understat-format">Understat Format: {current_home_format}</div>', unsafe_allow_html=True)
-        
-        col1a, col1b = st.columns(2)
-        with col1a:
-            home_xg_total = st.number_input(
-                "Total xG Scored",
-                min_value=0.0,
-                max_value=20.0,
-                value=current_inputs['home_xg_total'],
-                step=0.1,
-                key="home_xg_total_input",
-                help="Total expected goals scored in last 5 HOME matches"
-            )
-        with col1b:
-            home_xga_total = st.number_input(
-                "Total xGA Conceded",
-                min_value=0.0,
-                max_value=20.0,
-                value=current_inputs['home_xga_total'],
-                step=0.1,
-                key="home_xga_total_input",
-                help="Total expected goals against in last 5 HOME matches"
-            )
-        
-        # Calculate and show per-match averages
-        home_xg_per_match = home_xg_total / 5
-        home_xga_per_match = home_xga_total / 5
-        
-        st.metric("xG per match", f"{home_xg_per_match:.2f}")
-        st.metric("xGA per match", f"{home_xga_per_match:.2f}")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="input-card">', unsafe_allow_html=True)
-        away_base = engine.get_team_base_name(away_team)
-        st.subheader(f"📈 {away_base} - Last 5 AWAY Matches")
-        
-        # Understat format display
-        current_away_format = f"{current_inputs['away_xg_total']}-{current_inputs['away_xga_total']}"
-        st.markdown(f'<div class="understat-format">Understat Format: {current_away_format}</div>', unsafe_allow_html=True)
-        
-        col2a, col2b = st.columns(2)
-        with col2a:
-            away_xg_total = st.number_input(
-                "Total xG Scored",
-                min_value=0.0,
-                max_value=20.0,
-                value=current_inputs['away_xg_total'],
-                step=0.1,
-                key="away_xg_total_input",
-                help="Total expected goals scored in last 5 AWAY matches"
-            )
-        with col2b:
-            away_xga_total = st.number_input(
-                "Total xGA Conceded",
-                min_value=0.0,
-                max_value=20.0,
-                value=current_inputs['away_xga_total'],
-                step=0.1,
-                key="away_xga_total_input",
-                help="Total expected goals against in last 5 AWAY matches"
-            )
-        
-        # Calculate and show per-match averages
-        away_xg_per_match = away_xg_total / 5
-        away_xga_per_match = away_xga_total / 5
-        
-        st.metric("xG per match", f"{away_xg_per_match:.2f}")
-        st.metric("xGA per match", f"{away_xga_per_match:.2f}")
-            
-        st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('<div class="section-header">🎭 Match Context</div>', unsafe_allow_html=True)
     
@@ -515,6 +416,8 @@ def display_understat_input_form(engine):
         st.subheader("🩹 Injury Status")
         
         injury_options = list(engine.injury_weights.keys())
+        home_base = engine.get_team_base_name(home_team)
+        away_base = engine.get_team_base_name(away_team)
         
         home_injuries = st.selectbox(
             f"{home_base} Injuries",
@@ -644,10 +547,6 @@ def display_understat_input_form(engine):
     inputs = {
         'home_team': home_team,
         'away_team': away_team,
-        'home_xg_total': home_xg_total,
-        'home_xga_total': home_xga_total,
-        'away_xg_total': away_xg_total,
-        'away_xga_total': away_xga_total,
         'home_injuries': home_injuries,
         'away_injuries': away_injuries,
         'home_rest': home_rest,
@@ -675,12 +574,10 @@ def display_enhanced_predictions(engine, result, inputs):
     
     # Get outcome-specific confidences
     if isinstance(result['confidence'], dict):
-        # New: outcome-specific confidence
         home_confidence = result['confidence']['home_win']
         draw_confidence = result['confidence']['draw']
         away_confidence = result['confidence']['away_win']
     else:
-        # Fallback: legacy single confidence
         home_confidence = result['confidence']
         draw_confidence = result['confidence']
         away_confidence = result['confidence']
@@ -781,7 +678,7 @@ def display_enhanced_predictions(engine, result, inputs):
             st.write("**🚫 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Key Factors - FIXED: Handle both string and number values
+    # Key Factors
     st.markdown("---")
     st.markdown('<div class="section-header">🔍 Prediction Key Factors</div>', unsafe_allow_html=True)
     
@@ -790,7 +687,6 @@ def display_enhanced_predictions(engine, result, inputs):
         st.write("**🎯 Winner Prediction Factors:**")
         winner_factors = result['enhanced_predictions']['winner']['key_factors']
         for factor, value in winner_factors.items():
-            # ✅ FIXED: Handle both string and number values
             if isinstance(value, (int, float)):
                 st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
             else:
@@ -800,7 +696,6 @@ def display_enhanced_predictions(engine, result, inputs):
         st.write("**⚽ Over/Under Prediction Factors:**")
         ou_factors = result['enhanced_predictions']['over_under']['key_factors']
         for factor, value in ou_factors.items():
-            # ✅ FIXED: Handle both string and number values
             if isinstance(value, (int, float)):
                 st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
             else:
@@ -810,14 +705,13 @@ def display_enhanced_predictions(engine, result, inputs):
         st.write("**🎪 BTTS Prediction Factors:**")
         btts_factors = result['enhanced_predictions']['btts']['key_factors']
         for factor, value in btts_factors.items():
-            # ✅ FIXED: Handle both string and number values
             if isinstance(value, (int, float)):
                 st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
             else:
                 st.write(f"- {factor.replace('_', ' ').title()}: {value}")
 
 def display_prediction_results(engine, result, inputs):
-    """ENHANCED: Display prediction results with integrated data"""
+    """Display prediction results with integrated data"""
     st.markdown('<div class="main-header">🎯 Enhanced Prediction Results</div>', unsafe_allow_html=True)
     
     # Get base team names for display
@@ -831,6 +725,11 @@ def display_prediction_results(engine, result, inputs):
     home_league = engine.get_team_data(inputs['home_team'])['league']
     st.markdown(f'<div style="text-align: center; margin-bottom: 1rem;"><span class="league-badge">{home_league}</span> <span class="enhanced-badge">ENHANCED PREDICTIONS</span></div>', unsafe_allow_html=True)
     
+    # Data source indicator
+    st.markdown('<div class="success-box">', unsafe_allow_html=True)
+    st.markdown("**✅ AUTOMATED DATA INTEGRATION:** Using integrated team statistics - no manual input required")
+    st.markdown("</div>", unsafe_allow_html=True)
+    
     # Context Reliability Indicator
     reliability_class = f"reliability-{result['reliability_level'].split()[0].lower()}"
     st.markdown(f'<div class="{reliability_class}">{result["reliability_level"]}: {result["reliability_advice"]}</div>', unsafe_allow_html=True)
@@ -843,14 +742,12 @@ def display_prediction_results(engine, result, inputs):
     with col1:
         st.markdown('<div class="input-card">', unsafe_allow_html=True)
         st.subheader("🏠 Home Team Analysis")
-        # ✅ FIXED: Pass is_home=True for home team
         display_enhanced_team_info(engine, inputs['home_team'], True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="input-card">', unsafe_allow_html=True)
         st.subheader("✈️ Away Team Analysis")  
-        # ✅ FIXED: Pass is_home=False for away team
         display_enhanced_team_info(engine, inputs['away_team'], False)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -861,11 +758,10 @@ def display_prediction_results(engine, result, inputs):
     st.markdown(f'<h1 style="font-size: 4rem; margin: 1rem 0;">{expected_home:.2f} - {expected_away:.2f}</h1>', unsafe_allow_html=True)
     st.markdown('<p style="font-size: 1.2rem;">Expected Final Score (Enhanced Poisson-based)</p>', unsafe_allow_html=True)
     
-    # ✅ FIXED: Overall confidence - handle both dictionary and number formats
+    # Overall confidence
     confidence_data = result['confidence']
     
     if isinstance(confidence_data, dict):
-        # New: outcome-specific confidence dictionary
         confidence_values = list(confidence_data.values())
         avg_confidence = sum(confidence_values) / len(confidence_values)
         confidence_stars = "★" * int((avg_confidence - 40) / 8) + "☆" * (5 - int((avg_confidence - 40) / 8))
@@ -882,7 +778,6 @@ def display_prediction_results(engine, result, inputs):
             st.write(f"**✈️ {away_base} Win:** {confidence_data['away_win']:.0f}% confidence")
             
     else:
-        # Legacy: single confidence number
         confidence = confidence_data
         confidence_stars = "★" * int((confidence - 40) / 8) + "☆" * (5 - int((confidence - 40) / 8))
         confidence_text = "Low" if confidence < 55 else "Medium" if confidence < 65 else "High" if confidence < 75 else "Very High"
@@ -961,11 +856,6 @@ def display_prediction_results(engine, result, inputs):
     
     for insight in result['insights']:
         st.markdown(f'<div class="metric-card">• {insight}</div>', unsafe_allow_html=True)
-    
-    # Data integration status
-    st.markdown('<div class="success-box">', unsafe_allow_html=True)
-    st.markdown("**✅ ENHANCED DATA INTEGRATION:** All data updates have been fully integrated and are being utilized in predictions.")
-    st.markdown("</div>", unsafe_allow_html=True)
     
     # Statistical insights
     total_xg = result['expected_goals']['home'] + result['expected_goals']['away']
@@ -1066,7 +956,7 @@ def main():
     # Show edit form if requested
     if st.session_state.show_edit:
         st.markdown('<div class="main-header">✏️ Edit Match Inputs</div>', unsafe_allow_html=True)
-        inputs, validation_errors = display_understat_input_form(engine)
+        inputs, validation_errors = display_input_form(engine)
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -1091,7 +981,7 @@ def main():
     
     # Show main input form
     else:
-        inputs, validation_errors = display_understat_input_form(engine)
+        inputs, validation_errors = display_input_form(engine)
         
         # Generate Prediction Button
         st.markdown("---")
