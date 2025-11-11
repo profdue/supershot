@@ -87,10 +87,10 @@ class EnhancedPredictor:
         # 5) ELO-based probabilities
         elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
 
-        # 6) 🚨 CRITICAL FIX: Dynamic blending weights with quality adjustment
+        # 6) 🚨 CRITICAL FIX: Dynamic blending weights with enhanced quality adjustment
         poisson_weight = self._compute_dynamic_poisson_weight(home_xg, away_xg)
         
-        # 🚨 FIXED: Apply quality-based adjustment to reduce Poisson weight for elite teams
+        # 🚨 ENHANCED: Apply quality-based adjustment to reduce Poisson weight for elite teams
         poisson_weight = self._compute_quality_adjusted_weight(home_data, away_data, poisson_weight)
         elo_weight = 1.0 - poisson_weight
 
@@ -364,7 +364,7 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
-    # 🚨 CRITICAL FIX: Weight adjustment methods
+    # 🚨 CRITICAL FIX: Enhanced weight adjustment methods
     @staticmethod
     def _compute_dynamic_poisson_weight(home_xg: float, away_xg: float) -> float:
         """
@@ -379,26 +379,58 @@ class EnhancedPredictor:
 
     def _compute_quality_adjusted_weight(self, home_data: dict, away_data: dict, base_weight: float) -> float:
         """
-        🚨 NEW: Reduce Poisson weight when there's a big quality difference
+        🚨 ENHANCED: Reduce Poisson weight when there's a big quality difference
         """
         home_tier = home_data['base_quality']['structural_tier']
         away_tier = away_data['base_quality']['structural_tier']
         home_elo = home_data['base_quality']['elo']
         away_elo = away_data['base_quality']['elo']
         
-        # Reduce Poisson weight for elite vs strong/weak teams
-        if (home_tier == 'elite' and away_tier != 'elite') or (away_tier == 'elite' and home_tier != 'elite'):
-            print(f"🔍 QUALITY ADJUSTMENT: Elite team detected. Reducing Poisson weight by 30%")
-            return base_weight * 0.7  # 30% reduction for elite teams
+        total_reduction = 0.0
         
-        # Additional reduction for very large ELO differences (>200)
+        # 🚨 ENHANCED: Reduce Poisson weight for elite vs strong/weak teams
+        if (home_tier == 'elite' and away_tier != 'elite') or (away_tier == 'elite' and home_tier != 'elite'):
+            elite_reduction = 0.35  # Increased from 0.30 to 0.35
+            total_reduction += elite_reduction
+            print(f"🔍 QUALITY ADJUSTMENT: Elite team detected. Reducing Poisson weight by {int(elite_reduction*100)}%")
+        
+        # 🚨 ENHANCED: Additional reduction for very large ELO differences (>200)
         elo_diff = abs(home_elo - away_elo)
         if elo_diff > 200:
-            reduction = min(0.2, (elo_diff - 200) / 1000)  # Up to 20% additional reduction
-            print(f"🔍 ELO ADJUSTMENT: Large ELO difference {elo_diff}. Reducing Poisson weight by {reduction:.1%}")
-            return base_weight * (1 - reduction)
+            elo_reduction = min(0.25, (elo_diff - 200) / 800)  # Up to 25% additional reduction
+            total_reduction += elo_reduction
+            print(f"🔍 ELO ADJUSTMENT: Large ELO difference {elo_diff}. Reducing Poisson weight by {elo_reduction:.1%}")
+        
+        # 🚨 NEW: Additional reduction for injury mismatches
+        home_injury_severity = self._get_injury_severity(home_data.get('injury_level', 'None'))
+        away_injury_severity = self._get_injury_severity(away_data.get('injury_level', 'None'))
+        injury_diff = abs(home_injury_severity - away_injury_severity)
+        
+        if injury_diff >= 2:  # Significant injury mismatch
+            injury_reduction = 0.10
+            total_reduction += injury_reduction
+            print(f"🔍 INJURY ADJUSTMENT: Significant injury mismatch. Reducing Poisson weight by {int(injury_reduction*100)}%")
+        
+        # Apply total reduction (capped at 60% maximum reduction)
+        max_reduction = 0.60
+        total_reduction = min(total_reduction, max_reduction)
+        
+        if total_reduction > 0:
+            print(f"🔍 TOTAL WEIGHT ADJUSTMENT: Reducing Poisson weight by {int(total_reduction*100)}% (from {base_weight:.3f} to {base_weight * (1 - total_reduction):.3f})")
+            return base_weight * (1 - total_reduction)
         
         return base_weight
+
+    def _get_injury_severity(self, injury_level: str) -> int:
+        """Convert injury level to severity score"""
+        severity_map = {
+            "None": 0,
+            "Minor": 1, 
+            "Moderate": 2,
+            "Significant": 3,
+            "Crisis": 4
+        }
+        return severity_map.get(injury_level, 0)
 
     # -------------------------
     # Utility & scoring helpers
