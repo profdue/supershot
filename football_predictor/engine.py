@@ -62,15 +62,21 @@ class DataIntegrator:
                 }
                 
     def _integrate_home_advantage_data(self):
-        """Integrate home advantage data with proper mapping"""
+        """Integrate home advantage data with proper mapping - FIXED FOR YOUR DATA STRUCTURE"""
         if 'home_advantage' in self.engine.data:
             df = self.engine.data['home_advantage']
             for _, row in df.iterrows():
                 team_key = row['team_key']
+                
+                # ✅ FIXED: Use YOUR column names and calculate goals_boost
+                performance_diff = row['performance_difference']
+                strength = row['advantage_strength']
+                goals_boost = performance_diff * 0.33  # Convert PPG difference to goals
+                
                 self.home_advantage_data[team_key] = {
-                    'ppg_diff': row['ppg_diff'],
-                    'goals_boost': row['goals_boost'],
-                    'strength': row['strength']
+                    'ppg_diff': performance_diff,  # Map to expected name
+                    'goals_boost': goals_boost,    # Calculate from performance_diff
+                    'strength': strength           # Map to expected name
                 }
                 
     def _integrate_team_quality_data(self):
@@ -92,14 +98,18 @@ class DataIntegrator:
         for team_key, perf_data in self.team_database.items():
             team_base = self._extract_base_name(team_key)
             
-            # Get home advantage data
+            # Get home advantage data - FIXED default values
             home_adv = self.home_advantage_data.get(team_key, {
-                'ppg_diff': 0.0, 'goals_boost': 0.0, 'strength': 'moderate'
+                'ppg_diff': 0.0, 
+                'goals_boost': 0.0, 
+                'strength': 'moderate'
             })
             
             # Get base team quality data
             base_quality = self.team_base_data.get(team_base, {
-                'elo': 1600, 'squad_value': 100000000, 'structural_tier': 'average'
+                'elo': 1600, 
+                'squad_value': 100000000, 
+                'structural_tier': 'average'
             })
             
             # Calculate per-match averages
@@ -123,7 +133,7 @@ class DataIntegrator:
                 'xg_per_match': xg_per_match,
                 'xga_per_match': xga_per_match,
                 
-                # Home advantage data
+                # Home advantage data - FIXED structure
                 'home_advantage': home_adv,
                 
                 # Base team quality
@@ -167,18 +177,34 @@ class DataIntegrator:
         return self.comprehensive_database.get(team_key, self._get_default_team_data(team_key))
         
     def _get_default_team_data(self, team_key):
-        """Get default data for missing teams"""
+        """Get default data for missing teams - FIXED structure"""
         base_name = self._extract_base_name(team_key)
         return {
             'league': "Premier League",
-            'xg_total': 7.5, 'xga_total': 7.5, 'matches_played': 5,
-            'form_trend': 0.0, 'location': 'home' if 'Home' in team_key else 'away',
-            'clean_sheet_pct': 20, 'btts_pct': 50, 'goal_difference': 0,
-            'xg_per_match': 1.5, 'xga_per_match': 1.5, 'net_xg_per_match': 0.0,
-            'home_advantage': {'ppg_diff': 0.0, 'goals_boost': 0.0, 'strength': 'moderate'},
-            'base_quality': {'elo': 1600, 'squad_value': 100000000, 'structural_tier': 'average'},
+            'xg_total': 7.5, 
+            'xga_total': 7.5, 
+            'matches_played': 5,
+            'form_trend': 0.0, 
+            'location': 'home' if 'Home' in team_key else 'away',
+            'clean_sheet_pct': 20, 
+            'btts_pct': 50, 
+            'goal_difference': 0,
+            'xg_per_match': 1.5, 
+            'xga_per_match': 1.5, 
+            'net_xg_per_match': 0.0,
+            'home_advantage': {
+                'ppg_diff': 0.0, 
+                'goals_boost': 0.0, 
+                'strength': 'moderate'
+            },
+            'base_quality': {
+                'elo': 1600, 
+                'squad_value': 100000000, 
+                'structural_tier': 'average'
+            },
             'base_name': base_name,
-            'attack_strength': 1.0, 'defense_strength': 1.0
+            'attack_strength': 1.0, 
+            'defense_strength': 1.0
         }
 
 class ProfessionalPredictionEngine:
@@ -299,15 +325,37 @@ class ProfessionalPredictionEngine:
         
         return errors
 
+    def _get_correct_team_data(self, team_key, is_home):
+        """✅ FIXED: Get correct home/away team data based on context"""
+        base_name = self.get_team_base_name(team_key)
+        
+        if is_home:
+            correct_key = f"{base_name} Home"
+        else:
+            correct_key = f"{base_name} Away"
+        
+        # Debug info
+        print(f"🔍 TEAM DATA: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
+        
+        data = self.get_team_data(correct_key)
+        
+        # Fallback if specific home/away data not found
+        if data is None or data.get('xg_total', 0) == 0:
+            fallback_key = f"{base_name} Home"  # Default to home data
+            print(f"⚠️  Using fallback data for {correct_key} -> {fallback_key}")
+            data = self.get_team_data(fallback_key)
+            
+        return data
+
     def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
         """Calculate goal expectancy using integrated data"""
         # Get comprehensive team data
         home_data = self.get_team_data(home_team)
         away_data = self.get_team_data(away_team)
         
-        # Use integrated home advantage data - calculate from performance_difference
-        home_boost = home_data['home_advantage']['ppg_diff'] * 0.33  # Convert PPG to goals
-        away_penalty = -away_data['home_advantage']['ppg_diff'] * 0.33 * 0.5  # Half penalty for away
+        # Use integrated home advantage data
+        home_boost = home_data['home_advantage']['goals_boost']
+        away_penalty = -away_data['home_advantage']['goals_boost'] * 0.5
         
         # Use league averages from integrated data
         league_avg_xg = self.data_integrator._get_league_avg_xg(league)
@@ -433,28 +481,6 @@ class ProfessionalPredictionEngine:
             insights.append(f"⚽ **GOAL-FRIENDLY**: {away_base} matches see both teams score in {away_data['btts_pct']}% of games")
         
         return insights
-
-    def _get_correct_team_data(self, team_key, is_home):
-        """✅ FIXED: Get correct home/away team data based on context"""
-        base_name = self.get_team_base_name(team_key)
-        
-        if is_home:
-            correct_key = f"{base_name} Home"
-        else:
-            correct_key = f"{base_name} Away"
-        
-        # Debug info
-        print(f"🔍 TEAM DATA: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
-        
-        data = self.get_team_data(correct_key)
-        
-        # Fallback if specific home/away data not found
-        if data is None or data.get('xg_total', 0) == 0:
-            fallback_key = f"{base_name} Home"  # Default to home data
-            print(f"⚠️  Using fallback data for {correct_key} -> {fallback_key}")
-            data = self.get_team_data(fallback_key)
-            
-        return data
 
     def predict_match_enhanced(self, inputs):
         """Enhanced prediction with better accuracy for winner, over/under, BTTS"""
