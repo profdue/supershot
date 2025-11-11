@@ -17,6 +17,28 @@ class EnhancedPredictor:
     def __init__(self, data_integrator):
         self.data_integrator = data_integrator
 
+    def _get_correct_team_data(self, team_key: str, is_home: bool) -> dict:
+        """✅ FIXED: Get correct home/away team data based on context"""
+        base_name = self.data_integrator._extract_base_name(team_key)
+        
+        if is_home:
+            correct_key = f"{base_name} Home"
+        else:
+            correct_key = f"{base_name} Away"
+        
+        # Debug info
+        print(f"🔍 ENHANCED PREDICTOR: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
+        
+        data = self.data_integrator.get_comprehensive_team_data(correct_key)
+        
+        # Fallback if specific home/away data not found
+        if data is None or data.get('xg_total', 0) == 0:
+            fallback_key = f"{base_name} Home"  # Default to home data
+            print(f"⚠️  ENHANCED PREDICTOR: Using fallback data for {correct_key} -> {fallback_key}")
+            data = self.data_integrator.get_comprehensive_team_data(fallback_key)
+            
+        return data
+
     # -------------------------
     # Public prediction methods
     # -------------------------
@@ -35,10 +57,14 @@ class EnhancedPredictor:
         Returns blended probabilities for home/draw/away, confidence and expected goals.
         """
 
-        # Get integrated team data
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        # ✅ FIXED: Get correct home/away team data
+        home_data = self._get_correct_team_data(home_team, is_home=True)
+        away_data = self._get_correct_team_data(away_team, is_home=False)
         league = home_data.get("league", away_data.get("league", "Premier League"))
+
+        # Debug team data
+        print(f"🔍 ENHANCED PREDICTOR - Home: {home_data['base_name']} - xG: {home_data['xg_per_match']:.2f}, Location: {home_data.get('location', 'unknown')}")
+        print(f"🔍 ENHANCED PREDICTOR - Away: {away_data['base_name']} - xG: {away_data['xg_per_match']:.2f}, Location: {away_data.get('location', 'unknown')}")
 
         # 1) compute base expected goals (apply quality + home advantage)
         home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
@@ -103,8 +129,9 @@ class EnhancedPredictor:
         """
         Predicts over/under markets (1.5, 2.5, 3.5). Returns probabilities, expected total, and confidence.
         """
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        # ✅ FIXED: Get correct home/away team data
+        home_data = self._get_correct_team_data(home_team, is_home=True)
+        away_data = self._get_correct_team_data(away_team, is_home=False)
         league = home_data.get("league", away_data.get("league", "Premier League"))
 
         home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
@@ -154,8 +181,9 @@ class EnhancedPredictor:
         """
         Predict BTTS (both teams to score) using Poisson and historical BTTS blend.
         """
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        # ✅ FIXED: Get correct home/away team data
+        home_data = self._get_correct_team_data(home_team, is_home=True)
+        away_data = self._get_correct_team_data(away_team, is_home=False)
 
         home_goal_exp, away_goal_exp = self._calculate_enhanced_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
@@ -234,8 +262,8 @@ class EnhancedPredictor:
         """
         Calculate quality-adjusted expected goals for each side based on integrated metrics.
         """
-        home_data = self.data_integrator.get_comprehensive_team_data(home_team)
-        away_data = self.data_integrator.get_comprehensive_team_data(away_team)
+        home_data = self._get_correct_team_data(home_team, is_home=True)
+        away_data = self._get_correct_team_data(away_team, is_home=False)
         league_avg = self.data_integrator._get_league_avg_xg(home_data.get("league", "Premier League"))
 
         # Avoid division by zero
