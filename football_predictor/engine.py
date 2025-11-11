@@ -342,31 +342,20 @@ class ProfessionalPredictionEngine:
             
         return data
 
-    def _get_team_xg_data(self, team_key, is_home):
-        """Get xG data for a team - now using integrated data only"""
-        team_data = self._get_correct_team_data(team_key, is_home)
-        
-        # Use the integrated data directly
-        xg_per_match = team_data['xg_per_match']
-        xga_per_match = team_data['xga_per_match']
-        
-        # Convert to totals for 5 matches (for compatibility)
-        xg_total = xg_per_match * 5
-        xga_total = xga_per_match * 5
-        
-        return xg_total, xga_total
-
-    def calculate_goal_expectancy(self, home_team, away_team, home_injuries, away_injuries, home_rest, away_rest):
-        """Calculate goal expectancy using ONLY integrated data"""
+    def _calculate_goal_expectancy_using_integrated_data(self, home_team, away_team, home_injuries, away_injuries, home_rest, away_rest):
+        """Calculate goal expectancy using ONLY integrated data - FIXED VERSION"""
         # Get comprehensive team data
         home_data = self.get_team_data(home_team)
         away_data = self.get_team_data(away_team)
         
-        # Use integrated xG data directly
+        # Use integrated xG data directly (PER MATCH values)
         home_xg_per_match = home_data['xg_per_match']
         home_xga_per_match = home_data['xga_per_match']
         away_xg_per_match = away_data['xg_per_match']
         away_xga_per_match = away_data['xga_per_match']
+        
+        print(f"🔍 GOAL EXP CALC - Home: {home_xg_per_match:.2f} xG, {home_xga_per_match:.2f} xGA")
+        print(f"🔍 GOAL EXP CALC - Away: {away_xg_per_match:.2f} xG, {away_xga_per_match:.2f} xGA")
         
         # Apply injury impacts
         home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
@@ -383,7 +372,6 @@ class ProfessionalPredictionEngine:
         
         # Use integrated home advantage data
         home_boost = home_data['home_advantage']['goals_boost']
-        away_penalty = -away_data['home_advantage']['goals_boost'] * 0.5
         
         # Use league averages from integrated data
         league = home_data['league']
@@ -396,9 +384,48 @@ class ProfessionalPredictionEngine:
         
         # Apply integrated home advantage
         home_goal_exp += home_boost
-        away_goal_exp += away_penalty
+        
+        # Apply reality check to prevent unrealistic totals
+        home_goal_exp, away_goal_exp = self._apply_goal_expectancy_reality_check(
+            home_goal_exp, away_goal_exp, home_data, away_data, league
+        )
+        
+        print(f"🔍 GOAL EXP RESULT - Home: {home_goal_exp:.2f}, Away: {away_goal_exp:.2f}, Total: {home_goal_exp + away_goal_exp:.2f}")
         
         return max(0.1, home_goal_exp), max(0.1, away_goal_exp)
+
+    def _apply_goal_expectancy_reality_check(self, home_goals, away_goals, home_data, away_data, league):
+        """Apply reality checks to prevent unrealistic goal expectancies"""
+        total_goals = home_goals + away_goals
+        
+        # League-specific maximum reasonable totals
+        league_max_totals = {
+            "Premier League": 4.2,
+            "La Liga": 4.0,
+            "Bundesliga": 4.5,
+            "Serie A": 3.9,
+            "Ligue 1": 4.0,
+            "RFPL": 3.8
+        }
+        
+        max_reasonable = league_max_totals.get(league, 4.0)
+        
+        if total_goals > max_reasonable:
+            print(f"🚨 REALITY CHECK: Total goals {total_goals:.2f} exceeds max reasonable {max_reasonable}. Applying damping.")
+            damping_factor = max_reasonable / total_goals
+            home_goals *= damping_factor
+            away_goals *= damping_factor
+        
+        # Individual team limits (even elite teams rarely exceed 2.5 expected goals)
+        if home_goals > 2.5:
+            home_goals = min(home_goals, 2.5)
+            print(f"🚨 REALITY CHECK: Home goals capped at 2.5 (was {home_goals:.2f})")
+        
+        if away_goals > 2.3:  # Away teams typically score less
+            away_goals = min(away_goals, 2.3)
+            print(f"🚨 REALITY CHECK: Away goals capped at 2.3 (was {away_goals:.2f})")
+        
+        return home_goals, away_goals
 
     def _apply_prediction_sanity_checks(self, result, home_data, away_data):
         """Apply sanity checks to prevent unrealistic predictions"""
@@ -445,20 +472,6 @@ class ProfessionalPredictionEngine:
             result['probabilities']['home_win'] = home_win_prob / total
             result['probabilities']['away_win'] = away_win_prob / total
             result['probabilities']['draw'] = result['probabilities']['draw'] / total
-        
-        # Sanity check: Total goals shouldn't be unrealistically high
-        total_goals = result['expected_goals']['home'] + result['expected_goals']['away']
-        if total_goals > 5.0:
-            damping = 4.5 / total_goals
-            result['expected_goals']['home'] *= damping
-            result['expected_goals']['away'] *= damping
-        
-        # Sanity check: Very weak teams shouldn't have high goal expectancy
-        if home_tier == 'weak' and result['expected_goals']['home'] > 2.0:
-            result['expected_goals']['home'] = min(result['expected_goals']['home'], 1.5)
-        
-        if away_tier == 'weak' and result['expected_goals']['away'] > 2.0:
-            result['expected_goals']['away'] = min(result['expected_goals']['away'], 1.5)
         
         return result
 
@@ -518,7 +531,7 @@ class ProfessionalPredictionEngine:
         return insights
 
     def predict_match_enhanced(self, inputs):
-        """Enhanced prediction using ONLY integrated data - no manual xG inputs"""
+        """Enhanced prediction using ONLY integrated data - COMPLETELY FIXED VERSION"""
         # Validate team selection
         validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
         if validation_errors:
@@ -528,8 +541,11 @@ class ProfessionalPredictionEngine:
         home_data = self._get_correct_team_data(inputs['home_team'], is_home=True)
         away_data = self._get_correct_team_data(inputs['away_team'], is_home=False)
         
-        # Calculate goal expectancy using integrated data only
-        home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
+        print(f"🔍 PREDICTION - Home: {home_data['base_name']} (xG: {home_data['xg_per_match']:.2f})")
+        print(f"🔍 PREDICTION - Away: {away_data['base_name']} (xG: {away_data['xg_per_match']:.2f})")
+        
+        # Calculate goal expectancy using integrated data only - FIXED
+        home_goal_exp, away_goal_exp = self._calculate_goal_expectancy_using_integrated_data(
             inputs['home_team'], inputs['away_team'],
             inputs['home_injuries'], inputs['away_injuries'],
             inputs['home_rest'], inputs['away_rest']
@@ -537,22 +553,44 @@ class ProfessionalPredictionEngine:
         
         # Use enhanced predictor if available, otherwise fall back to basic
         if self.enhanced_predictor:
+            print("🎯 Using Enhanced Predictor with PER-MATCH values")
+            
+            # 🚨 CRITICAL FIX: Convert to per-match values before passing to enhanced predictor
+            home_xg_per_match = home_data['xg_per_match']
+            home_xga_per_match = home_data['xga_per_match']
+            away_xg_per_match = away_data['xg_per_match']
+            away_xga_per_match = away_data['xga_per_match']
+            
+            # Apply injury impacts to per-match values
+            home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
+                home_xg_per_match, home_xga_per_match,
+                inputs['home_injuries'], inputs['home_rest'],
+                home_data['form_trend']
+            )
+            
+            away_xg_adj, away_xga_adj = self.injury_analyzer.apply_injury_impact(
+                away_xg_per_match, away_xga_per_match,
+                inputs['away_injuries'], inputs['away_rest'],
+                away_data['form_trend']
+            )
+            
             winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp,
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,  # ← PER MATCH values
                 inputs['home_injuries'], inputs['away_injuries']
             )
             
             over_under_prediction = self.enhanced_predictor.predict_over_under_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj   # ← PER MATCH values
             )
             
             btts_prediction = self.enhanced_predictor.predict_btts_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj   # ← PER MATCH values
             )
         else:
+            print("🎯 Using Basic Predictor (Enhanced not available)")
             # Fall back to basic predictions
             basic_probs = self.poisson_calculator.calculate_poisson_probabilities(home_goal_exp, away_goal_exp)
             
