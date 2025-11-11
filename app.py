@@ -259,7 +259,7 @@ def get_default_inputs():
     """Get default input values"""
     return {
         'home_team': 'Arsenal Home',
-        'away_team': 'Manchester United Away',
+        'away_team': 'Brighton Away',
         'home_xg_total': 10.25,
         'home_xga_total': 1.75,
         'away_xg_total': 8.75,
@@ -275,22 +275,30 @@ def get_default_inputs():
     }
 
 def display_enhanced_team_info(engine, team_key, is_home=True):
-    """Display enhanced team information using integrated data"""
+    """✅ FIXED: Display enhanced team information using integrated data"""
     team_data = engine.get_team_data(team_key)
     base_name = team_data['base_name']
     
     badge_class = "home-badge" if is_home else "away-badge"
-    st.write(f"**Team:** {base_name} <span class='{badge_class}'>{'HOME' if is_home else 'AWAY'}</span>", unsafe_allow_html=True)
+    location_text = "HOME" if is_home else "AWAY"
+    st.write(f"**Team:** {base_name} <span class='{badge_class}'>{location_text}</span>", unsafe_allow_html=True)
     st.write(f"**League:** {team_data['league']}")
     
     # Form trend with emoji
     trend_emoji = "↗️" if team_data['form_trend'] > 0.02 else "↘️" if team_data['form_trend'] < -0.02 else "➡️"
     st.write(f"**Form Trend:** {trend_emoji} {team_data['form_trend']:.3f}")
     
-    # Home advantage display
-    home_adv = team_data['home_advantage']
-    advantage_class = f"{home_adv['strength']}-advantage"
-    st.write(f"**{'Home' if is_home else 'Away'} Advantage:** <span class='advantage-indicator {advantage_class}'>{home_adv['strength'].upper()}</span> (+{home_adv['goals_boost']:.3f} goals)", unsafe_allow_html=True)
+    # ✅ FIXED: Only show home advantage for home teams, show away performance for away teams
+    if is_home:
+        # Home team: show home advantage
+        home_adv = team_data['home_advantage']
+        advantage_class = f"{home_adv['strength']}-advantage"
+        st.write(f"**Home Advantage:** <span class='advantage-indicator {advantage_class}'>{home_adv['strength'].upper()}</span> (+{home_adv['goals_boost']:.3f} goals)", unsafe_allow_html=True)
+    else:
+        # Away team: show away performance context
+        location = team_data.get('location', 'away')
+        away_performance = "Good" if team_data['xg_per_match'] > 1.4 else "Average" if team_data['xg_per_match'] > 1.0 else "Poor"
+        st.write(f"**Away Performance:** <span class='advantage-indicator moderate-advantage'>{away_performance.upper()}</span> ({team_data['xg_per_match']:.2f} xG/match)", unsafe_allow_html=True)
     
     # Team quality
     quality = team_data['base_quality']
@@ -391,7 +399,7 @@ def display_understat_input_form(engine):
             key="away_team_input"
         )
         
-        # Display enhanced team info
+        # ✅ FIXED: Display away team info correctly (is_home=False)
         display_enhanced_team_info(engine, away_team, False)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -835,12 +843,14 @@ def display_prediction_results(engine, result, inputs):
     with col1:
         st.markdown('<div class="input-card">', unsafe_allow_html=True)
         st.subheader("🏠 Home Team Analysis")
+        # ✅ FIXED: Pass is_home=True for home team
         display_enhanced_team_info(engine, inputs['home_team'], True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="input-card">', unsafe_allow_html=True)
         st.subheader("✈️ Away Team Analysis")  
+        # ✅ FIXED: Pass is_home=False for away team
         display_enhanced_team_info(engine, inputs['away_team'], False)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -992,11 +1002,11 @@ def display_prediction_results(engine, result, inputs):
     st.markdown("""
     <div class="warning-box">
     <strong>Professional Betting Reality Check:</strong><br>
-    • <strong>Enhanced Accuracy:</strong> 55-60% for match outcomes with integrated data<br>
-    • <strong>Sustainable Edge:</strong> 3-6% in efficient markets<br>
-    • <strong>Value Bet Frequency:</strong> 10-20% of matches with enhanced detection<br>
-    • <strong>Long-term Success:</strong> Requires discipline and proper bankroll management<br>
-    • <strong>Variance:</strong> Even with positive EV, losing streaks of 5-10 bets are normal
+    • <strong>Enhanced Accuracy:** 55-60% for match outcomes with integrated data<br>
+    • <strong>Sustainable Edge:** 3-6% in efficient markets<br>
+    • <strong>Value Bet Frequency:** 10-20% of matches with enhanced detection<br>
+    • <strong>Long-term Success:** Requires discipline and proper bankroll management<br>
+    • <strong>Variance:** Even with positive EV, losing streaks of 5-10 bets are normal
     </div>
     """, unsafe_allow_html=True)
     
