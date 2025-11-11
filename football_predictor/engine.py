@@ -62,21 +62,20 @@ class DataIntegrator:
                 }
                 
     def _integrate_home_advantage_data(self):
-        """Integrate home advantage data with proper mapping - FIXED FOR YOUR DATA STRUCTURE"""
+        """Integrate home advantage data with proper mapping"""
         if 'home_advantage' in self.engine.data:
             df = self.engine.data['home_advantage']
             for _, row in df.iterrows():
                 team_key = row['team_key']
                 
-                # ✅ FIXED: Use YOUR column names and calculate goals_boost
                 performance_diff = row['performance_difference']
                 strength = row['advantage_strength']
-                goals_boost = performance_diff * 0.33  # Convert PPG difference to goals
+                goals_boost = performance_diff * 0.33
                 
                 self.home_advantage_data[team_key] = {
-                    'ppg_diff': performance_diff,  # Map to expected name
-                    'goals_boost': goals_boost,    # Calculate from performance_diff
-                    'strength': strength           # Map to expected name
+                    'ppg_diff': performance_diff,
+                    'goals_boost': goals_boost,
+                    'strength': strength
                 }
                 
     def _integrate_team_quality_data(self):
@@ -98,7 +97,7 @@ class DataIntegrator:
         for team_key, perf_data in self.team_database.items():
             team_base = self._extract_base_name(team_key)
             
-            # Get home advantage data - FIXED default values
+            # Get home advantage data
             home_adv = self.home_advantage_data.get(team_key, {
                 'ppg_diff': 0.0, 
                 'goals_boost': 0.0, 
@@ -112,7 +111,7 @@ class DataIntegrator:
                 'structural_tier': 'average'
             })
             
-            # Calculate per-match averages
+            # Calculate per-match averages from stored data
             matches = max(1, perf_data['matches_played'])
             xg_per_match = perf_data['xg_total'] / matches
             xga_per_match = perf_data['xga_total'] / matches
@@ -133,7 +132,7 @@ class DataIntegrator:
                 'xg_per_match': xg_per_match,
                 'xga_per_match': xga_per_match,
                 
-                # Home advantage data - FIXED structure
+                # Home advantage data
                 'home_advantage': home_adv,
                 
                 # Base team quality
@@ -170,14 +169,14 @@ class DataIntegrator:
         
     def _get_league_avg_xga(self, league):
         """Get league average xGA"""
-        return self._get_league_avg_xg(league)  # Same as xG for simplicity
+        return self._get_league_avg_xg(league)
 
     def get_comprehensive_team_data(self, team_key):
         """Get fully integrated team data"""
         return self.comprehensive_database.get(team_key, self._get_default_team_data(team_key))
         
     def _get_default_team_data(self, team_key):
-        """Get default data for missing teams - FIXED structure"""
+        """Get default data for missing teams"""
         base_name = self._extract_base_name(team_key)
         return {
             'league': "Premier League",
@@ -326,7 +325,7 @@ class ProfessionalPredictionEngine:
         return errors
 
     def _get_correct_team_data(self, team_key, is_home):
-        """✅ FIXED: Get correct home/away team data based on context"""
+        """Get correct home/away team data based on context"""
         base_name = self.get_team_base_name(team_key)
         
         if is_home:
@@ -334,36 +333,66 @@ class ProfessionalPredictionEngine:
         else:
             correct_key = f"{base_name} Away"
         
-        # Debug info
-        print(f"🔍 TEAM DATA: Requested '{team_key}', is_home={is_home}, Using '{correct_key}'")
-        
         data = self.get_team_data(correct_key)
         
         # Fallback if specific home/away data not found
         if data is None or data.get('xg_total', 0) == 0:
-            fallback_key = f"{base_name} Home"  # Default to home data
-            print(f"⚠️  Using fallback data for {correct_key} -> {fallback_key}")
+            fallback_key = f"{base_name} Home"
             data = self.get_team_data(fallback_key)
             
         return data
 
-    def calculate_goal_expectancy(self, home_xg, home_xga, away_xg, away_xga, home_team, away_team, league):
-        """Calculate goal expectancy using integrated data"""
+    def _get_team_xg_data(self, team_key, is_home):
+        """Get xG data for a team - now using integrated data only"""
+        team_data = self._get_correct_team_data(team_key, is_home)
+        
+        # Use the integrated data directly
+        xg_per_match = team_data['xg_per_match']
+        xga_per_match = team_data['xga_per_match']
+        
+        # Convert to totals for 5 matches (for compatibility)
+        xg_total = xg_per_match * 5
+        xga_total = xga_per_match * 5
+        
+        return xg_total, xga_total
+
+    def calculate_goal_expectancy(self, home_team, away_team, home_injuries, away_injuries, home_rest, away_rest):
+        """Calculate goal expectancy using ONLY integrated data"""
         # Get comprehensive team data
         home_data = self.get_team_data(home_team)
         away_data = self.get_team_data(away_team)
+        
+        # Use integrated xG data directly
+        home_xg_per_match = home_data['xg_per_match']
+        home_xga_per_match = home_data['xga_per_match']
+        away_xg_per_match = away_data['xg_per_match']
+        away_xga_per_match = away_data['xga_per_match']
+        
+        # Apply injury impacts
+        home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
+            home_xg_per_match, home_xga_per_match,
+            home_injuries, home_rest,
+            home_data['form_trend']
+        )
+        
+        away_xg_adj, away_xga_adj = self.injury_analyzer.apply_injury_impact(
+            away_xg_per_match, away_xga_per_match,
+            away_injuries, away_rest,
+            away_data['form_trend']
+        )
         
         # Use integrated home advantage data
         home_boost = home_data['home_advantage']['goals_boost']
         away_penalty = -away_data['home_advantage']['goals_boost'] * 0.5
         
         # Use league averages from integrated data
+        league = home_data['league']
         league_avg_xg = self.data_integrator._get_league_avg_xg(league)
         league_avg_xga = self.data_integrator._get_league_avg_xga(league)
         
         # Enhanced normalization using integrated data
-        home_goal_exp = home_xg * (away_xga / league_avg_xga) ** 0.7 * home_data['attack_strength'] ** 0.3
-        away_goal_exp = away_xg * (home_xga / league_avg_xga) ** 0.7 * away_data['attack_strength'] ** 0.3
+        home_goal_exp = home_xg_adj * (away_xga_adj / league_avg_xga) ** 0.7 * home_data['attack_strength'] ** 0.3
+        away_goal_exp = away_xg_adj * (home_xga_adj / league_avg_xga) ** 0.7 * away_data['attack_strength'] ** 0.3
         
         # Apply integrated home advantage
         home_goal_exp += home_boost
@@ -381,16 +410,11 @@ class ProfessionalPredictionEngine:
         home_win_prob = result['probabilities']['home_win']
         away_win_prob = result['probabilities']['away_win']
         
-        # Debug info
-        print(f"🔍 SANITY CHECK: {home_data['base_name']} ({home_tier}, ELO {home_elo}) vs {away_data['base_name']} ({away_tier}, ELO {away_elo})")
-        print(f"🔍 Before sanity: Home {home_win_prob:.1%}, Away {away_win_prob:.1%}")
-        
-        # 🚨 NEW SANITY CHECK: Elite teams should rarely be underdogs against non-elite teams
+        # Elite teams should rarely be underdogs against non-elite teams
         if (home_tier == 'elite' and away_tier != 'elite' and away_win_prob > home_win_prob) or \
            (away_tier == 'elite' and home_tier != 'elite' and home_win_prob > away_win_prob):
-            print(f"🚨 SANITY: Elite team as underdog. Forcing correction.")
             if home_tier == 'elite':
-                home_win_prob = max(home_win_prob, 0.45)  # Elite teams min 45% chance
+                home_win_prob = max(home_win_prob, 0.45)
                 away_win_prob = min(away_win_prob, 0.40)
             else:
                 away_win_prob = max(away_win_prob, 0.45)
@@ -403,11 +427,9 @@ class ProfessionalPredictionEngine:
             result['probabilities']['away_win'] = away_win_prob / total
             result['probabilities']['draw'] = draw_prob / total
         
-        # Sanity check 1: Weak teams shouldn't be heavy favorites over strong teams
+        # Sanity check: Weak teams shouldn't be heavy favorites over strong teams
         if (home_tier == 'weak' and away_tier == 'strong' and home_win_prob > 0.6) or \
            (away_tier == 'weak' and home_tier == 'strong' and away_win_prob > 0.6):
-            print(f"🚨 SANITY: Weak team favored over strong team. Applying correction.")
-            # Apply ELO-based correction
             elo_diff = home_elo - away_elo
             elo_correction = 1 / (1 + 10 ** (-elo_diff / 400))
             
@@ -424,24 +446,19 @@ class ProfessionalPredictionEngine:
             result['probabilities']['away_win'] = away_win_prob / total
             result['probabilities']['draw'] = result['probabilities']['draw'] / total
         
-        # Sanity check 2: Total goals shouldn't be unrealistically high
+        # Sanity check: Total goals shouldn't be unrealistically high
         total_goals = result['expected_goals']['home'] + result['expected_goals']['away']
         if total_goals > 5.0:
-            print(f"🚨 SANITY: Unrealistic total goals {total_goals:.2f}. Applying damping.")
-            damping = 4.5 / total_goals  # Cap at 4.5 total goals
+            damping = 4.5 / total_goals
             result['expected_goals']['home'] *= damping
             result['expected_goals']['away'] *= damping
         
-        # Sanity check 3: Very weak teams shouldn't have high goal expectancy
+        # Sanity check: Very weak teams shouldn't have high goal expectancy
         if home_tier == 'weak' and result['expected_goals']['home'] > 2.0:
-            print(f"🚨 SANITY: Weak team {home_data['base_name']} has high goal expectancy. Capping.")
             result['expected_goals']['home'] = min(result['expected_goals']['home'], 1.5)
         
         if away_tier == 'weak' and result['expected_goals']['away'] > 2.0:
-            print(f"🚨 SANITY: Weak team {away_data['base_name']} has high goal expectancy. Capping.")
             result['expected_goals']['away'] = min(result['expected_goals']['away'], 1.5)
-        
-        print(f"🔍 After sanity: Home {result['probabilities']['home_win']:.1%}, Away {result['probabilities']['away_win']:.1%}")
         
         return result
 
@@ -501,65 +518,42 @@ class ProfessionalPredictionEngine:
         return insights
 
     def predict_match_enhanced(self, inputs):
-        """Enhanced prediction with better accuracy for winner, over/under, BTTS"""
+        """Enhanced prediction using ONLY integrated data - no manual xG inputs"""
         # Validate team selection
         validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
         if validation_errors:
             return None, validation_errors, []
         
-        # ✅ FIXED: Get correct home/away team data
+        # Get team data
         home_data = self._get_correct_team_data(inputs['home_team'], is_home=True)
         away_data = self._get_correct_team_data(inputs['away_team'], is_home=False)
         
-        # Debug team data
-        print(f"🔍 Home Team: {home_data['base_name']} - xG: {home_data['xg_per_match']:.2f}, Location: {home_data.get('location', 'unknown')}")
-        print(f"🔍 Away Team: {away_data['base_name']} - xG: {away_data['xg_per_match']:.2f}, Location: {away_data.get('location', 'unknown')}")
-        
-        # Calculate per-match averages from user inputs (these override the base data)
-        home_xg_per_match = inputs['home_xg_total'] / 5
-        home_xga_per_match = inputs['home_xga_total'] / 5
-        away_xg_per_match = inputs['away_xg_total'] / 5
-        away_xga_per_match = inputs['away_xga_total'] / 5
-        
-        # Apply injury impacts
-        home_xg_adj, home_xga_adj = self.injury_analyzer.apply_injury_impact(
-            home_xg_per_match, home_xga_per_match,
-            inputs['home_injuries'], inputs['home_rest'],
-            home_data['form_trend']
-        )
-        
-        away_xg_adj, away_xga_adj = self.injury_analyzer.apply_injury_impact(
-            away_xg_per_match, away_xga_per_match,
-            inputs['away_injuries'], inputs['away_rest'],
-            away_data['form_trend']
+        # Calculate goal expectancy using integrated data only
+        home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
+            inputs['home_team'], inputs['away_team'],
+            inputs['home_injuries'], inputs['away_injuries'],
+            inputs['home_rest'], inputs['away_rest']
         )
         
         # Use enhanced predictor if available, otherwise fall back to basic
         if self.enhanced_predictor:
-            print("🎯 Using Enhanced Predictor")
             winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,
+                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp,
                 inputs['home_injuries'], inputs['away_injuries']
             )
             
             over_under_prediction = self.enhanced_predictor.predict_over_under_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
+                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp
             )
             
             btts_prediction = self.enhanced_predictor.predict_btts_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
+                home_goal_exp, away_goal_exp, home_goal_exp, away_goal_exp
             )
         else:
-            print("🎯 Using Basic Predictor (Enhanced not available)")
             # Fall back to basic predictions
-            home_goal_exp, away_goal_exp = self.calculate_goal_expectancy(
-                home_xg_adj, home_xga_adj, away_xg_adj, away_xga_adj,
-                inputs['home_team'], inputs['away_team'], home_data['league']
-            )
-            
             basic_probs = self.poisson_calculator.calculate_poisson_probabilities(home_goal_exp, away_goal_exp)
             
             winner_prediction = {
@@ -611,7 +605,7 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # ✅ FIXED: Use outcome-specific confidence calculation instead of single global confidence
+        # Use outcome-specific confidence calculation
         outcome_confidences, confidence_factors = self.confidence_calculator.calculate_outcome_specific_confidence(
             probabilities, home_data, away_data, inputs
         )
@@ -626,7 +620,7 @@ class ProfessionalPredictionEngine:
             'key_factors_over_under': over_under_prediction['key_factors'],
             'key_factors_btts': btts_prediction['key_factors'],
             'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions',
-            'outcome_specific_confidences': outcome_confidences,  # Include the new confidence scores
+            'outcome_specific_confidences': outcome_confidences,
             'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
         
@@ -646,7 +640,7 @@ class ProfessionalPredictionEngine:
             'probabilities': combined_probabilities,
             'expected_goals': winner_prediction['expected_goals'],
             'value_bets': value_bets,
-            'confidence': outcome_confidences,  # ✅ FIXED: Now using outcome-specific confidences
+            'confidence': outcome_confidences,
             'confidence_factors': confidence_factors,
             'enhanced_predictions': {
                 'winner': winner_prediction,
