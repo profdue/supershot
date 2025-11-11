@@ -22,8 +22,9 @@ class ConfidenceCalculator:
             home_data, away_data, inputs
         )
         
-        # 🚨 CRITICAL FIX: Use the actual probabilities from the enhanced predictor
-        # Not the raw inputs that might be causing issues
+        # 🚨 CRITICAL: Store current probabilities for confidence calculation
+        home_data['current_probability'] = probabilities['home_win']
+        away_data['current_probability'] = probabilities['away_win']
         
         # Outcome-specific adjustments
         home_win_confidence = self._calculate_win_confidence(
@@ -38,11 +39,25 @@ class ConfidenceCalculator:
             probabilities['draw'], context_confidence, home_data, away_data
         )
         
-        return {
+        outcome_confidences = {
             'home_win': home_win_confidence,
             'draw': draw_confidence,
             'away_win': away_win_confidence
-        }, factors
+        }
+        
+        # 🚨 CRITICAL SANITY CHECK: Predicted winner should have highest confidence
+        max_prob = max(probabilities['home_win'], probabilities['away_win'], probabilities['draw'])
+        predicted_outcome = [k for k, v in probabilities.items() if v == max_prob][0]
+        
+        # If predicted winner doesn't have highest confidence, fix it
+        predicted_confidence = outcome_confidences[predicted_outcome]
+        max_confidence = max(outcome_confidences.values())
+        
+        if predicted_confidence < max_confidence:
+            print(f"🚨 CONFIDENCE SANITY FIX: Boosting {predicted_outcome} confidence from {predicted_confidence} to {max_confidence + 2}")
+            outcome_confidences[predicted_outcome] = max_confidence + 2
+        
+        return outcome_confidences, factors
 
     def _calculate_context_confidence(self, home_data, away_data, inputs):
         """Calculate overall match context confidence"""
@@ -84,108 +99,84 @@ class ConfidenceCalculator:
         return min(95, max(40, context_confidence)), factors
 
     def _calculate_win_confidence(self, win_probability, context_confidence, team_data, opponent_data, side):
-        """Calculate confidence for a win outcome - FIXED VERSION"""
+        """🚨 COMPLETELY REVISED: Confidence must align with probability logic"""
         
-        # 🚨 FIXED: Consistent, non-overlapping confidence ranges
-        if win_probability >= 0.75:
-            prob_confidence = 80 + (win_probability - 0.75) * 40  # 80-84% (0.75-0.85)
+        # 🚨 CRITICAL: Confidence should correlate with probability strength
+        # Higher probability = Higher confidence (with reality checks)
+        
+        if win_probability >= 0.70:
+            base_confidence = 78 + (win_probability - 0.70) * 40  # 78-82%
         elif win_probability >= 0.60:
-            prob_confidence = 70 + (win_probability - 0.60) * 67  # 70-80% (0.60-0.75)
-        elif win_probability >= 0.45:
-            prob_confidence = 60 + (win_probability - 0.45) * 67  # 60-70% (0.45-0.60)
+            base_confidence = 72 + (win_probability - 0.60) * 60  # 72-78%
+        elif win_probability >= 0.50:
+            base_confidence = 65 + (win_probability - 0.50) * 70  # 65-72%
+        elif win_probability >= 0.40:
+            base_confidence = 58 + (win_probability - 0.40) * 70  # 58-65%
         elif win_probability >= 0.30:
-            prob_confidence = 50 + (win_probability - 0.30) * 67  # 50-60% (0.30-0.45)
-        elif win_probability >= 0.15:
-            prob_confidence = 40 + (win_probability - 0.15) * 67  # 40-50% (0.15-0.30)
+            base_confidence = 50 + (win_probability - 0.30) * 80  # 50-58%
+        elif win_probability >= 0.20:
+            base_confidence = 42 + (win_probability - 0.20) * 80  # 42-50%
         else:
-            prob_confidence = 30 + win_probability * 67  # 30-40% (0.00-0.15)
+            base_confidence = 35 + win_probability * 350  # 35-42%
         
-        # 🚨 Ensure we stay within bounds
-        prob_confidence = min(85, max(25, prob_confidence))
+        # 🚨 REALITY CHECK: Predicted winner should have HIGHEST confidence
+        # Get all probabilities to determine if this is the predicted winner
+        all_probs = {
+            'home': team_data.get('current_probability', 0) if side == 'home' else opponent_data.get('current_probability', 0),
+            'away': opponent_data.get('current_probability', 0) if side == 'home' else team_data.get('current_probability', 0),
+            'draw': 1 - (team_data.get('current_probability', 0) + opponent_data.get('current_probability', 0))
+        }
         
-        # Reality check adjustments
+        predicted_winner = max(all_probs, key=all_probs.get)
+        is_predicted_winner = (
+            (side == 'home' and predicted_winner == 'home') or
+            (side == 'away' and predicted_winner == 'away')
+        )
+        
+        # 🚨 BOOST confidence for predicted winner
+        if is_predicted_winner and win_probability > 0.35:
+            base_confidence += 8  # Significant boost for predicted winner
+            print(f"🔍 PREDICTED WINNER BOOST: {side} gets +8% confidence boost")
+        
+        # 🚨 SANITY: Elite teams shouldn't have low confidence when favored
         team_tier = team_data['base_quality']['structural_tier']
         opponent_tier = opponent_data['base_quality']['structural_tier']
-        team_elo = team_data['base_quality']['elo']
-        opponent_elo = opponent_data['base_quality']['elo']
         
-        # Calculate realistic probability based on ELO difference
-        elo_diff = team_elo - opponent_elo
-        if side == 'home':
-            elo_diff += 100  # Home advantage
+        if team_tier == 'elite' and opponent_tier != 'elite' and win_probability > 0.45 and base_confidence < 60:
+            base_confidence = max(base_confidence, 65)  # Minimum confidence for elite favorites
+            print(f"🔍 ELITE TEAM CONFIDENCE BOOST: {side} minimum confidence set to 65%")
         
-        realistic_prob = 1 / (1 + 10 ** (-elo_diff / 400))
-        probability_gap = abs(win_probability - realistic_prob)
+        # Apply context (but less influence)
+        final_confidence = 0.8 * base_confidence + 0.2 * context_confidence
         
-        # Apply reduction for unrealistic probabilities
-        if probability_gap > 0.15:
-            reduction = min(0.4, probability_gap * 1.5)  # Up to 40% reduction
-            prob_confidence = max(25, prob_confidence * (1 - reduction))
-            print(f"🔍 CONFIDENCE ADJUSTMENT: Probability-reality gap {probability_gap:.2f}. Reducing confidence by {int(reduction*100)}%")
-        
-        # Additional quality-based sanity checks
-        if team_tier == 'weak' and opponent_tier == 'strong' and win_probability > 0.5:
-            reduction_factor = 0.6
-            print(f"🔍 CONFIDENCE ADJUSTMENT: Weak team favored over strong team. Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(25, prob_confidence * reduction_factor)
-        
-        if team_tier == 'elite' and opponent_tier != 'elite' and win_probability < 0.4:
-            reduction_factor = 0.6
-            print(f"🔍 CONFIDENCE ADJUSTMENT: Elite team underdog against non-elite. Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(25, prob_confidence * reduction_factor)
-        
-        # Form trend adjustment (smaller impact)
-        form_trend = team_data['form_trend']
-        if form_trend > 0.05 and win_probability > 0.4:
-            prob_confidence += 2
-        elif form_trend < -0.05 and win_probability > 0.4:
-            prob_confidence -= 2
-        
-        # 🚨 FIXED: Better blending with context (context should have less influence)
-        final_confidence = 0.7 * prob_confidence + 0.3 * context_confidence
-        
-        return min(90, max(25, final_confidence))
+        return min(85, max(35, final_confidence))
 
     def _calculate_draw_confidence(self, draw_probability, context_confidence, home_data, away_data):
-        """Calculate confidence for draw outcome - FIXED VERSION"""
+        """🚨 FIXED: Draw confidence should be conservative and probability-based"""
         
-        # 🚨 FIXED: More conservative draw confidence
-        if draw_probability >= 0.40:
-            prob_confidence = 60 + (draw_probability - 0.40) * 25  # 60-65% (0.40-0.60)
-        elif draw_probability >= 0.30:
-            prob_confidence = 50 + (draw_probability - 0.30) * 33  # 50-60% (0.30-0.40)
-        elif draw_probability >= 0.20:
-            prob_confidence = 40 + (draw_probability - 0.20) * 50  # 40-50% (0.20-0.30)
-        elif draw_probability >= 0.10:
-            prob_confidence = 30 + (draw_probability - 0.10) * 50  # 30-40% (0.10-0.20)
+        # Draws are inherently less predictable
+        if draw_probability >= 0.35:
+            base_confidence = 55 + (draw_probability - 0.35) * 28  # 55-59%
+        elif draw_probability >= 0.25:
+            base_confidence = 48 + (draw_probability - 0.25) * 70  # 48-55%
+        elif draw_probability >= 0.15:
+            base_confidence = 40 + (draw_probability - 0.15) * 80  # 40-48%
         else:
-            prob_confidence = 20 + draw_probability * 100  # 20-30% (0.00-0.10)
+            base_confidence = 30 + draw_probability * 67  # 30-40%
         
-        # 🚨 FIXED: Draws are inherently less predictable
-        prob_confidence *= 0.85  # 15% reduction for draw uncertainty
+        # 🚨 Draw confidence should generally be LOWER than win confidences
+        base_confidence *= 0.9  # Additional 10% reduction for draw uncertainty
         
-        # Team quality mismatch adjustment
-        home_tier = home_data['base_quality']['structural_tier']
-        away_tier = away_data['base_quality']['structural_tier']
-        
-        # Lower confidence if elite vs weak teams have high draw probability
-        if (home_tier == 'elite' and away_tier == 'weak' and draw_probability > 0.25) or \
-           (away_tier == 'elite' and home_tier == 'weak' and draw_probability > 0.25):
-            reduction_factor = 0.7  # 30% reduction
-            print(f"🔍 DRAW CONFIDENCE ADJUSTMENT: Unlikely draw scenario (elite vs weak). Reducing confidence by {int((1-reduction_factor)*100)}%")
-            prob_confidence = max(20, prob_confidence * reduction_factor)
-        
-        # ELO difference adjustment
+        # Close matches (similar ELO) increase draw confidence
         elo_diff = abs(home_data['base_quality']['elo'] - away_data['base_quality']['elo'])
-        if elo_diff < 100:  # Close match
-            prob_confidence += 5
-        elif elo_diff > 250:  # Mismatch
-            prob_confidence -= 8
+        if elo_diff < 100:
+            base_confidence += 5
+        elif elo_diff > 250:
+            base_confidence -= 8
         
-        # 🚨 FIXED: Context has even less influence on draw confidence
-        final_confidence = 0.8 * prob_confidence + 0.2 * context_confidence
+        final_confidence = 0.85 * base_confidence + 0.15 * context_confidence
         
-        return min(75, max(20, final_confidence))
+        return min(70, max(25, final_confidence))
 
     def _calculate_team_consistency(self, team_data):
         """Calculate team performance consistency"""
@@ -278,6 +269,43 @@ class ConfidenceCalculator:
             confidence += 2  # Higher confidence for low totals
         
         return min(85, max(35, confidence))
+
+    # 🚨 NEW METHOD: Calculate BTTS confidence with proper logic
+    def calculate_btts_confidence(self, btts_probability, home_data, away_data, home_goal_exp, away_goal_exp):
+        """🚨 COMPLETELY FIXED: BTTS confidence based on probability strength"""
+        
+        # 🚨 CRITICAL: Confidence should vary based on how far from 50%
+        distance_from_50 = abs(btts_probability - 0.5)
+        
+        if distance_from_50 > 0.25:  # Very clear signal (25%+ from 50%)
+            base_confidence = 70 + (distance_from_50 - 0.25) * 100  # 70-75%
+        elif distance_from_50 > 0.15:  # Clear signal (15-25% from 50%)
+            base_confidence = 60 + (distance_from_50 - 0.15) * 100  # 60-70%
+        elif distance_from_50 > 0.08:  # Moderate signal (8-15% from 50%)
+            base_confidence = 50 + (distance_from_50 - 0.08) * 142  # 50-60%
+        elif distance_from_50 > 0.03:  # Weak signal (3-8% from 50%)
+            base_confidence = 40 + (distance_from_50 - 0.03) * 200  # 40-50%
+        else:  # Very close to 50% (0-3% from 50%)
+            base_confidence = 35 + distance_from_50 * 166  # 35-40%
+        
+        # Historical consistency adjustment
+        hist_home = home_data.get("btts_pct", 50) / 100.0
+        hist_away = away_data.get("btts_pct", 50) / 100.0
+        hist_avg = (hist_home + hist_away) / 2.0
+        
+        # Reduce confidence if historical data is inconsistent with prediction
+        if abs(hist_avg - btts_probability) > 0.2:
+            base_confidence *= 0.9
+        
+        # Ensure BTTS Yes and No have different confidences when probabilities differ
+        if abs(btts_probability - 0.5) > 0.01:  # If probabilities are meaningfully different
+            # The more likely outcome should have slightly higher confidence
+            if btts_probability > 0.5:
+                base_confidence += 1
+            else:
+                base_confidence -= 1
+        
+        return min(80, max(35, base_confidence))
 
     # For backward compatibility
     def calculate_confidence(self, home_xg, away_xg, home_xga, away_xga, inputs):
