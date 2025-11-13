@@ -3,107 +3,60 @@ from typing import Tuple, Dict, Any
 import numpy as np
 from scipy.stats import poisson
 
-
 class EnhancedPredictor:
-    """
-    Enhanced predictor with COMPLETE SEPARATION of goal counting (pure xG) and win probabilities (blended).
-    ELO only influences who wins, not how many goals are scored.
-    """
-
     def __init__(self, data_integrator):
         self.data_integrator = data_integrator
 
     def _get_correct_team_data(self, team_key: str, is_home: bool) -> dict:
-        """✅ FIXED: Get correct home/away team data based on context"""
         base_name = self.data_integrator._extract_base_name(team_key)
-        
-        if is_home:
-            correct_key = f"{base_name} Home"
-        else:
-            correct_key = f"{base_name} Away"
-        
+        correct_key = f"{base_name} Home" if is_home else f"{base_name} Away"
         data = self.data_integrator.get_comprehensive_team_data(correct_key)
         
-        # Fallback if specific home/away data not found
         if data is None or data.get('xg_total', 0) == 0:
             fallback_key = f"{base_name} Home"
             data = self.data_integrator.get_comprehensive_team_data(fallback_key)
-            
         return data
 
-    # -------------------------
-    # Public prediction methods
-    # -------------------------
-    def predict_winner_enhanced(
-        self,
-        home_team: str,
-        away_team: str,
-        home_xg: float,      # PER MATCH values
-        away_xg: float,      # PER MATCH values
-        home_xga: float,     # PER MATCH values
-        away_xga: float,     # PER MATCH values
-        home_injuries: str = "None",
-        away_injuries: str = "None",
-    ) -> Dict[str, Any]:
-        """
-        Returns blended probabilities for home/draw/away, confidence and expected goals.
-        GOAL COUNTING: Pure xG-based (NO ELO influence)
-        WIN PROBABILITIES: Blended Poisson + ELO
-        """
-
-        # ✅ FIXED: Get correct home/away team data
+    def predict_winner_enhanced(self, home_team: str, away_team: str, home_xg: float, 
+                              away_xg: float, home_xga: float, away_xga: float,
+                              home_injuries: str = "None", away_injuries: str = "None") -> Dict[str, Any]:
+        
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
-        league = home_data.get("league", away_data.get("league", "Premier League"))
+        league = home_data.get("league", "Premier League")
 
-        print(f"🔍 ENHANCED PREDICTOR - Home: {home_data['base_name']} - Input xG: {home_xg:.2f}")
-        print(f"🔍 ENHANCED PREDICTOR - Away: {away_data['base_name']} - Input xG: {away_xg:.2f}")
-
-        # 🚨 CRITICAL FIX: COMPLETE SEPARATION OF CONCERNS
-
-        # 1) GOAL COUNTING: Pure xG-based (NO ELO influence)
+        # PURE xG-based goal counting (NO DOUBLE HOME ADVANTAGE)
         home_goal_exp, away_goal_exp = self._calculate_pure_xg_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
 
-        print(f"🔍 PURE XG GOALS - Base: Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}")
-
-        # 2) Apply injury adjustments to goal expectancies
+        # Apply injury adjustments
         inj_adj = self._calculate_injury_adjustment(home_injuries, away_injuries)
         home_goal_exp *= inj_adj["home_attack"]
         away_goal_exp *= inj_adj["away_attack"]
 
-        print(f"🔍 AFTER INJURIES - Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}")
-
-        # 3) Apply league damping and reality checks
+        # Apply professional reality checks
         home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
-        home_goal_exp, away_goal_exp = self._apply_final_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
+        home_goal_exp, away_goal_exp = self._apply_professional_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
 
-        print(f"🔍 FINAL GOALS - Home {home_goal_exp:.2f}, Away {away_goal_exp:.2f}, Total: {home_goal_exp + away_goal_exp:.2f}")
+        # Poisson probabilities
+        poisson_home_win, poisson_draw, poisson_away_win = self._calculate_poisson_match_probs(home_goal_exp, away_goal_exp)
 
-        # 4) Poisson-based probabilities FROM PURE GOAL COUNTS
-        poisson_home_win, poisson_draw, poisson_away_win = self._calculate_poisson_match_probs(
-            home_goal_exp, away_goal_exp
-        )
-
-        # 5) ELO-based probabilities (completely separate calculation)
+        # ELO probabilities  
         elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
 
-        # 6) 🚨 BLEND FOR WIN PROBABILITIES ONLY (goal counting is already pure xG)
-        poisson_weight = 0.60  # Poisson dominates for win probabilities from actual performance
-        elo_weight = 0.40     # ELO adjusts for team quality differences
-
-        print(f"🔍 WIN PROB BLENDING - Poisson: {poisson_weight:.3f}, Elo: {elo_weight:.3f}")
+        # Calibrated blend (reduced Poisson dominance)
+        poisson_weight = 0.55  # Reduced from 0.60
+        elo_weight = 0.45      # Increased from 0.40
 
         home_prob = poisson_weight * poisson_home_win + elo_weight * elo_home_win
         draw_prob = poisson_weight * poisson_draw + elo_weight * elo_draw
         away_prob = poisson_weight * poisson_away_win + elo_weight * elo_away_win
 
-        # 7) Normalise to ensure numeric stability
+        # Normalize
         home_prob, draw_prob, away_prob = self._normalize_triple(home_prob, draw_prob, away_prob)
 
-        # 8) Package result WITHOUT CONFIDENCE
-        result = {
+        return {
             "home_win": round(home_prob, 4),
             "draw": round(draw_prob, 4),
             "away_win": round(away_prob, 4),
@@ -117,85 +70,59 @@ class EnhancedPredictor:
                 "league": league,
             },
         }
-        return result
 
-    def predict_over_under_enhanced(
-        self,
-        home_team: str,
-        away_team: str,
-        home_xg: float,      # PER MATCH values
-        away_xg: float,      # PER MATCH values
-        home_xga: float,     # PER MATCH values
-        away_xga: float,     # PER MATCH values
-    ) -> Dict[str, Any]:
-        """
-        Predicts over/under markets using PURE xG-based goal counting.
-        """
-        # ✅ FIXED: Get correct home/away team data
+    def predict_over_under_enhanced(self, home_team: str, away_team: str, home_xg: float, 
+                                  away_xg: float, home_xga: float, away_xga: float) -> Dict[str, Any]:
+        
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
-        league = home_data.get("league", away_data.get("league", "Premier League"))
+        league = home_data.get("league", "Premier League")
 
-        # 🚨 PURE XG-BASED GOAL COUNTING (NO ELO)
+        # Pure xG-based goals
         home_goal_exp, away_goal_exp = self._calculate_pure_xg_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
 
-        # Apply damping and reality checks
         home_goal_exp, away_goal_exp = self._apply_league_damping(home_goal_exp, away_goal_exp, league)
-        home_goal_exp, away_goal_exp = self._apply_final_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
+        home_goal_exp, away_goal_exp = self._apply_professional_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
         
         total_lambda = home_goal_exp + away_goal_exp
 
-        print(f"🔍 OVER/UNDER - Pure xG total lambda: {total_lambda:.2f}")
-
-        # Use integer cdf values: Over 2.5 = 1 - P(X <= 2)
+        # ONLY THESE THREE MARKETS: Over 1.5, Over 2.5, Under 2.5
         over_15 = 1.0 - poisson.cdf(1, total_lambda)
         over_25 = 1.0 - poisson.cdf(2, total_lambda)
-        over_35 = 1.0 - poisson.cdf(3, total_lambda)
+        under_25 = poisson.cdf(2, total_lambda)  # P(X ≤ 2)
 
-        # Defensive consistency adjustment
+        # Defense consistency adjustment
         defense_consistency = (home_data.get("clean_sheet_pct", 0) + away_data.get("clean_sheet_pct", 0)) / 200.0
-        consistency_factor = 1.0 + (0.5 - defense_consistency) * 0.35
-        over_25 *= consistency_factor
-        over_25 = float(np.clip(over_25, 0.02, 0.98))
-        over_15 = float(np.clip(over_15 * consistency_factor, 0.02, 0.995))
-        over_35 = float(np.clip(over_35 * consistency_factor, 0.01, 0.95))
+        consistency_factor = 1.0 + (0.5 - defense_consistency) * 0.25  # Reduced impact
+        
+        over_25 = float(np.clip(over_25 * consistency_factor, 0.05, 0.95))
+        over_15 = float(np.clip(over_15 * consistency_factor, 0.10, 0.99))
+        under_25 = 1.0 - over_25  # Ensure consistency
 
         return {
             "over_1.5": round(over_15, 4),
             "over_2.5": round(over_25, 4),
-            "over_3.5": round(over_35, 4),
-            "under_1.5": round(1 - over_15, 4),
-            "under_2.5": round(1 - over_25, 4),
-            "under_3.5": round(1 - over_35, 4),
+            "under_2.5": round(under_25, 4),
             "expected_total_goals": round(total_lambda, 3),
-            "key_factors": {"total_lambda": round(total_lambda, 3), "defense_consistency": round(defense_consistency, 3)},
+            "key_factors": {
+                "total_lambda": round(total_lambda, 3), 
+                "defense_consistency": round(defense_consistency, 3)
+            },
         }
 
-    def predict_btts_enhanced(
-        self,
-        home_team: str,
-        away_team: str,
-        home_xg: float,      # PER MATCH values
-        away_xg: float,      # PER MATCH values
-        home_xga: float,     # PER MATCH values
-        away_xga: float,     # PER MATCH values
-    ) -> Dict[str, Any]:
-        """
-        Predict BTTS using PURE xG-based goal counting.
-        """
-        # ✅ FIXED: Get correct home/away team data
+    def predict_btts_enhanced(self, home_team: str, away_team: str, home_xg: float, 
+                             away_xg: float, home_xga: float, away_xga: float) -> Dict[str, Any]:
+        
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
 
-        # 🚨 PURE XG-BASED GOAL COUNTING (NO ELO)
         home_goal_exp, away_goal_exp = self._calculate_pure_xg_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
 
-        # Apply reality checks
-        home_goal_exp, away_goal_exp = self._apply_final_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
+        home_goal_exp, away_goal_exp = self._apply_professional_reality_check(home_goal_exp, away_goal_exp, home_data, away_data)
 
         prob_home_scores = 1.0 - poisson.cdf(0, home_goal_exp)
         prob_away_scores = 1.0 - poisson.cdf(0, away_goal_exp)
@@ -205,114 +132,81 @@ class EnhancedPredictor:
         historical_away = away_data.get("btts_pct", 50) / 100.0
         historical_avg = (historical_home + historical_away) / 2.0
 
-        # Dynamic blend: if xG signal is strong (both > 1.2) rely more on Poisson
-        blend_weight_hist = 0.6 if (home_goal_exp < 1.2 or away_goal_exp < 1.2) else 0.4
+        blend_weight_hist = 0.5  # More balanced blend
         btts_prob = blend_weight_hist * historical_avg + (1 - blend_weight_hist) * poisson_btts
-        btts_prob = float(np.clip(btts_prob, 0.05, 0.95))
+        btts_prob = float(np.clip(btts_prob, 0.10, 0.90))
 
         return {
             "btts_yes": round(btts_prob, 4),
             "btts_no": round(1.0 - btts_prob, 4),
-            "key_factors": {"historical_btts": round(historical_avg, 3), "poisson_btts": round(poisson_btts, 3)},
+            "key_factors": {
+                "historical_btts": round(historical_avg, 3), 
+                "poisson_btts": round(poisson_btts, 3)
+            },
         }
 
-    # -------------------------
-    # 🚨 CORE FIXED METHODS
-    # -------------------------
-    def _calculate_pure_xg_goal_expectancy(
-        self,
-        home_team: str,
-        away_team: str,
-        home_xg: float,      # PER MATCH values
-        away_xg: float,      # PER MATCH values
-        home_xga: float,     # PER MATCH values
-        away_xga: float,     # PER MATCH values
-    ) -> Tuple[float, float]:
-        """
-        🚨 PURE xG-based goal counting - NO ELO INFLUENCE
-        HOME ADVANTAGE IS ALREADY IN THE xG DATA - DO NOT ADD AGAIN!
-        """
+    def _calculate_pure_xg_goal_expectancy(self, home_team: str, away_team: str, 
+                                         home_xg: float, away_xg: float, 
+                                         home_xga: float, away_xga: float) -> Tuple[float, float]:
+        
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
-        league_avg = self.data_integrator._get_league_avg_xg(home_data.get("league", "Premier League"))
+        league_avg = max(0.1, self.data_integrator._get_league_avg_xg(home_data.get("league", "Premier League")))
 
-        # Avoid division by zero
-        league_avg = max(0.1, league_avg)
-        
-        # Pure xG calculation: team attack × opponent defense weakness
+        # Pure xG calculation - NO MANUAL HOME BOOST (it's already in the data)
         home_goal_exp = home_xg * (away_xga / league_avg)
         away_goal_exp = away_xg * (home_xga / league_avg)
 
-        # 🚨 CRITICAL FIX: COMPLETELY REMOVE HOME ADVANTAGE BOOST
-        # home_adv = float(home_data.get("home_advantage", {}).get("goals_boost", 0.0))
-        # home_goal_exp += home_adv  # ← THIS WAS CAUSING DOUBLE COUNTING
-
         # Ensure realistic minimums
-        home_goal_exp = max(0.1, home_goal_exp)
-        away_goal_exp = max(0.1, away_goal_exp)
-
-        # Debug output to verify no double home advantage
-        print(f"🔍 PURE XG - Home: {home_xg:.2f} → {home_goal_exp:.2f}, Away: {away_xg:.2f} → {away_goal_exp:.2f}")
+        home_goal_exp = max(0.15, home_goal_exp)
+        away_goal_exp = max(0.15, away_goal_exp)
 
         return home_goal_exp, away_goal_exp
 
-    def _apply_final_reality_check(self, home_goal_exp: float, away_goal_exp: float, home_data: dict, away_data: dict) -> Tuple[float, float]:
-        """
-        🚨 FINAL REALITY CHECK: Ensure goal expectancies are realistic
-        """
+    def _apply_professional_reality_check(self, home_goal_exp: float, away_goal_exp: float, 
+                                        home_data: dict, away_data: dict) -> Tuple[float, float]:
+        
+        home_tier = home_data['base_quality']['structural_tier']
+        away_tier = away_data['base_quality']['structural_tier']
         total_goals = home_goal_exp + away_goal_exp
         
-        # Premier League reality: matches rarely exceed 4.0 expected goals
-        if total_goals > 4.0:
-            print(f"🚨 FINAL REALITY CHECK: Total goals {total_goals:.2f} > 4.0. Applying correction.")
-            damping = 4.0 / total_goals
+        # Premier League reality: matches rarely exceed 3.8 expected goals
+        if total_goals > 3.8:
+            damping = 3.8 / total_goals
             home_goal_exp *= damping
             away_goal_exp *= damping
         
-        # Individual team limits based on team quality
-        home_tier = home_data['base_quality']['structural_tier']
-        away_tier = away_data['base_quality']['structural_tier']
-        
-        # Elite teams can score more
-        if home_tier == 'elite' and home_goal_exp > 2.5:
-            home_goal_exp = min(home_goal_exp, 2.8)  # Allow elite home teams to 2.8
-            print(f"🚨 FINAL REALITY CHECK: Elite home goals capped at 2.8")
-        elif home_goal_exp > 2.2:
-            home_goal_exp = min(home_goal_exp, 2.2)
-            print(f"🚨 FINAL REALITY CHECK: Home goals capped at 2.2")
+        # Individual team limits
+        if home_tier == 'elite' and home_goal_exp > 2.4:
+            home_goal_exp = min(home_goal_exp, 2.4)
+        elif home_goal_exp > 2.0:
+            home_goal_exp = min(home_goal_exp, 2.0)
         
         if away_tier == 'elite' and away_goal_exp > 2.0:
-            away_goal_exp = min(away_goal_exp, 2.3)  # Allow elite away teams to 2.3
-            print(f"🚨 FINAL REALITY CHECK: Elite away goals capped at 2.3")
-        elif away_goal_exp > 1.7:
-            away_goal_exp = min(away_goal_exp, 1.7)
-            print(f"🚨 FINAL REALITY CHECK: Away goals capped at 1.7")
+            away_goal_exp = min(away_goal_exp, 2.0)
+        elif away_goal_exp > 1.6:
+            away_goal_exp = min(away_goal_exp, 1.6)
         
         return home_goal_exp, away_goal_exp
 
     def _calculate_elo_probabilities(self, home_data: dict, away_data: dict) -> Tuple[float, float, float]:
-        """
-        ELO probabilities for WIN PROBABILITIES only (completely separate from goal counting)
-        """
         home_elo = home_data["base_quality"].get("elo", 1600)
         away_elo = away_data["base_quality"].get("elo", 1600)
 
-        # Home advantage in ELO points
-        HOME_ADV_ELO = 80
+        HOME_ADV_ELO = 70  # Reduced from 80
         elo_diff = (home_elo - away_elo) + HOME_ADV_ELO
 
-        # Home win raw using logistic-style conversion
         home_win_raw = 1.0 / (1.0 + 10 ** (-elo_diff / 400.0))
 
-        # Draw probability increases when teams are close
-        closeness = max(0.0, 1.0 - abs(elo_diff) / 600.0)
-        base_draw = 0.20
-        draw_prob = base_draw * (0.6 + 0.4 * closeness)
+        # Enhanced draw probability
+        closeness = max(0.0, 1.0 - abs(elo_diff) / 800.0)  # More draws for closer teams
+        base_draw = 0.26  # Increased base draw probability
+        draw_prob = base_draw * (0.7 + 0.3 * closeness)
 
-        # Split remaining mass between home and away
         remaining = 1.0 - draw_prob
         away_win_raw = 1.0 - home_win_raw
         denom = home_win_raw + away_win_raw
+        
         if denom <= 0:
             home_win = remaining / 2
             away_win = remaining / 2
@@ -323,40 +217,32 @@ class EnhancedPredictor:
         return self._normalize_triple(home_win, draw_prob, away_win)
 
     def _apply_league_damping(self, home_goal_exp: float, away_goal_exp: float, league: str) -> Tuple[float, float]:
-        """
-        Soft damping for very-high total-goal estimates.
-        """
         league_base = {
-            "Premier League": 0.95,
-            "La Liga": 0.92,
-            "Bundesliga": 1.00,
-            "Serie A": 0.90,
-            "Ligue 1": 0.93,
-            "RFPL": 0.88,
+            "Premier League": 0.92,
+            "La Liga": 0.90,
+            "Bundesliga": 0.95,
+            "Serie A": 0.88,
+            "Ligue 1": 0.90,
+            "RFPL": 0.85,
         }
-        base = league_base.get(league, 0.95)
+        base = league_base.get(league, 0.90)
         total = home_goal_exp + away_goal_exp
 
-        # Only moderate damping when total > 3.2
-        if total <= 3.2:
+        if total <= 3.0:  # More aggressive damping
             return home_goal_exp, away_goal_exp
 
-        excess = total - 3.2
-        damping = base - 0.03 * min(excess, 3.0)
-        damping = float(np.clip(damping, 0.75, 1.0))
+        excess = total - 3.0
+        damping = base - 0.04 * min(excess, 3.0)  # Stronger damping
+        damping = float(np.clip(damping, 0.70, 1.0))
 
         return home_goal_exp * damping, away_goal_exp * damping
 
     def _calculate_poisson_match_probs(self, home_lambda: float, away_lambda: float) -> Tuple[float, float, float]:
-        """
-        Compute probabilities of home win / draw / away win from pure goal counts.
-        """
         max_goals = 8
         home_win = 0.0
         draw = 0.0
         away_win = 0.0
 
-        # Precompute pmfs for speed
         home_pmf = [poisson.pmf(i, home_lambda) for i in range(max_goals + 1)]
         away_pmf = [poisson.pmf(j, away_lambda) for j in range(max_goals + 1)]
 
@@ -370,7 +256,6 @@ class EnhancedPredictor:
                 else:
                     away_win += p
 
-        # Add tail mass for goals > max_goals
         home_tail = 1.0 - sum(home_pmf)
         away_tail = 1.0 - sum(away_pmf)
         tail_mass = home_tail * away_tail
@@ -380,15 +265,13 @@ class EnhancedPredictor:
         return self._normalize_triple(home_win, draw, away_win)
 
     def _calculate_injury_adjustment(self, home_injuries: str, away_injuries: str) -> Dict[str, float]:
-        """
-        Returns multipliers for attack and defense.
-        """
+        # MORE CONSERVATIVE injury impacts
         injury_weights = {
             "None": {"attack_mult": 1.00, "defense_mult": 1.00},
             "Minor": {"attack_mult": 0.97, "defense_mult": 0.96},
-            "Moderate": {"attack_mult": 0.92, "defense_mult": 0.88},
-            "Significant": {"attack_mult": 0.85, "defense_mult": 0.82},
-            "Crisis": {"attack_mult": 0.75, "defense_mult": 0.72},
+            "Moderate": {"attack_mult": 0.93, "defense_mult": 0.90},  # Reduced from 0.90/0.87
+            "Significant": {"attack_mult": 0.88, "defense_mult": 0.85},  # Reduced from 0.85/0.82
+            "Crisis": {"attack_mult": 0.80, "defense_mult": 0.78},  # Reduced from 0.75/0.72
         }
         home_adj = injury_weights.get(home_injuries, injury_weights["None"])
         away_adj = injury_weights.get(away_injuries, injury_weights["None"])
@@ -399,12 +282,8 @@ class EnhancedPredictor:
             "away_defense": float(away_adj["defense_mult"]),
         }
 
-    # -------------------------
-    # Utility & scoring helpers
-    # -------------------------
     @staticmethod
     def _normalize_triple(a: float, b: float, c: float) -> Tuple[float, float, float]:
-        """Normalize three positive numbers so they sum to 1."""
         vals = np.array([float(a), float(b), float(c)], dtype=float)
         vals = np.clip(vals, 0.0, None)
         s = vals.sum()
