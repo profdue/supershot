@@ -1,75 +1,64 @@
+import numpy as np
+
 class ValueCalculator:
     def __init__(self):
-        # Thresholds can later be calibrated empirically (based on ROI history)
+        # MORE CONSERVATIVE thresholds
         self.value_thresholds = {
-            "excellent": {"ev": 0.08, "value_ratio": 1.12},
-            "good": {"ev": 0.04, "value_ratio": 1.06},
-            "fair": {"ev": 0.01, "value_ratio": 1.02},
+            "excellent": {"ev": 0.12, "value_ratio": 1.18},
+            "good": {"ev": 0.06, "value_ratio": 1.10},
+            "fair": {"ev": 0.02, "value_ratio": 1.03},
             "poor": {"ev": 0.00, "value_ratio": 1.00}
         }
 
-    # ---------------------- CORE CALCULATION ---------------------- #
     def calculate_true_value(self, probability, odds):
-        """Calculate true value, expected value, and Kelly fraction for a single market."""
+        """PROFESSIONAL value calculation with safe Kelly"""
+        
+        # Input validation
+        if not (0 <= probability <= 1) or odds <= 1.0:
+            return self._invalid_output(probability, odds, reason="invalid_input")
 
-        # --- Input validation --- #
-        if not (0 <= probability <= 1):
-            return self._invalid_output(probability, odds, reason="invalid_probability")
-        if odds <= 1.0:
-            return self._invalid_output(probability, odds, reason="invalid_odds")
-
-        # --- Expected Value (EV) --- #
+        # Expected Value
         ev = (probability * (odds - 1)) - (1 - probability)
 
-        # --- Kelly Criterion --- #
+        # SAFE Kelly Criterion (Fractional + Capped)
         if probability * odds > 1:
-            kelly_fraction = (probability * odds - 1) / (odds - 1)
+            raw_kelly = (probability * odds - 1) / (odds - 1)
+            # Fractional Kelly (25%) with 2% maximum stake
+            kelly_fraction = min(0.02, raw_kelly * 0.25)
         else:
             kelly_fraction = 0
 
-        # --- Value Ratio (simple heuristic indicator) --- #
+        # Value Ratio
         value_ratio = probability * odds
 
-        # --- Rating logic (threshold-based) --- #
+        # Rating
         rating = self._get_value_rating(ev, value_ratio)
 
-        # --- Final dictionary output --- #
         return {
             "ev": round(ev, 4),
-            "kelly_fraction": round(max(0, kelly_fraction), 4),
+            "kelly_fraction": round(kelly_fraction, 4),  # NOW SAFE
             "value_ratio": round(value_ratio, 4),
             "rating": rating,
             "implied_prob": round(1 / odds, 4),
             "model_prob": round(probability, 4),
         }
 
-    # ---------------------- BULK CALCULATION ---------------------- #
     def calculate_value_bets(self, probabilities, odds):
-        """
-        Calculate value metrics for all markets in parallel.
-        Automatically handles missing markets and invalid data gracefully.
-        """
         value_bets = {}
-
         for market, prob in probabilities.items():
-            if market not in odds:
-                # Missing odds for this market
-                value_bets[market] = self._invalid_output(prob, None, reason="missing_odds")
-            else:
+            if market in odds:
                 value_bets[market] = self.calculate_true_value(prob, odds[market])
-
+            else:
+                value_bets[market] = self._invalid_output(prob, None, reason="missing_odds")
         return value_bets
 
-    # ---------------------- INTERNAL HELPERS ---------------------- #
     def _get_value_rating(self, ev, value_ratio):
-        """Return qualitative rating based on EV and value ratio thresholds."""
         for level in ["excellent", "good", "fair"]:
             if ev >= self.value_thresholds[level]["ev"] and value_ratio >= self.value_thresholds[level]["value_ratio"]:
                 return level
         return "poor"
 
     def _invalid_output(self, probability, odds, reason="invalid"):
-        """Standardized invalid output for consistency."""
         return {
             "ev": -1,
             "kelly_fraction": 0,
