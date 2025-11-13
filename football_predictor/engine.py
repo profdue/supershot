@@ -61,7 +61,7 @@ class DataIntegrator:
                 }
                 
     def _integrate_home_advantage_data(self):
-        """Integrate home advantage data with proper mapping - FIXED"""
+        """Integrate home advantage data with proper mapping - NO BOOST"""
         if 'home_advantage' in self.engine.data:
             df = self.engine.data['home_advantage']
             print(f"🔍 HOME ADVANTAGE DATA COLUMNS: {list(df.columns)}")
@@ -70,28 +70,25 @@ class DataIntegrator:
                 # ✅ FIX: Use the correct column name from your data
                 team_base = row['team_base']
                 
-                # Calculate performance difference from home/away PPG
+                # Calculate performance difference from home/away PPG - NO GOALS BOOST
                 home_ppg = row['home_ppg']
                 away_ppg = row['away_ppg']
                 performance_diff = home_ppg - away_ppg
                 
                 strength = row['advantage_strength']
-                goals_boost = performance_diff * 0.33
                 
-                # Store with both home and away keys for lookup
+                # Store with both home and away keys for lookup - NO BOOST
                 home_key = f"{team_base} Home"
                 away_key = f"{team_base} Away"
                 
                 self.home_advantage_data[home_key] = {
                     'ppg_diff': performance_diff,
-                    'goals_boost': goals_boost,
                     'strength': strength
                 }
                 
                 # Away teams get default/weaker advantage
                 self.home_advantage_data[away_key] = {
                     'ppg_diff': 0.0,  # Away teams don't get home advantage
-                    'goals_boost': 0.0,
                     'strength': 'weak'
                 }
                 
@@ -114,10 +111,9 @@ class DataIntegrator:
         for team_key, perf_data in self.team_database.items():
             team_base = self._extract_base_name(team_key)
             
-            # Get home advantage data
+            # Get home advantage data - NO BOOST
             home_adv = self.home_advantage_data.get(team_key, {
                 'ppg_diff': 0.0, 
-                'goals_boost': 0.0, 
                 'strength': 'moderate'
             })
             
@@ -149,7 +145,7 @@ class DataIntegrator:
                 'xg_per_match': xg_per_match,
                 'xga_per_match': xga_per_match,
                 
-                # Home advantage data
+                # Home advantage data - NO BOOST
                 'home_advantage': home_adv,
                 
                 # Base team quality
@@ -210,7 +206,6 @@ class DataIntegrator:
             'net_xg_per_match': 0.0,
             'home_advantage': {
                 'ppg_diff': 0.0, 
-                'goals_boost': 0.0, 
                 'strength': 'moderate'
             },
             'base_quality': {
@@ -364,7 +359,7 @@ class ProfessionalPredictionEngine:
         return data
 
     def _calculate_goal_expectancy_using_integrated_data(self, home_team, away_team, home_injuries, away_injuries, home_rest, away_rest):
-        """Calculate goal expectancy using ONLY integrated data - FIXED VERSION"""
+        """Calculate goal expectancy using ONLY integrated data - NO BOOST VERSION"""
         # Get comprehensive team data
         home_data = self.get_team_data(home_team)
         away_data = self.get_team_data(away_team)
@@ -391,20 +386,15 @@ class ProfessionalPredictionEngine:
             away_data['form_trend']
         )
         
-        # Use integrated home advantage data
-        home_boost = home_data['home_advantage']['goals_boost']
-        
+        # NO HOME ADVANTAGE BOOST - home advantage is already in the data
         # Use league averages from integrated data
         league = home_data['league']
         league_avg_xg = self.data_integrator._get_league_avg_xg(league)
         league_avg_xga = self.data_integrator._get_league_avg_xga(league)
         
-        # Enhanced normalization using integrated data
+        # Enhanced normalization using integrated data - NO BOOST
         home_goal_exp = home_xg_adj * (away_xga_adj / league_avg_xga) ** 0.7 * home_data['attack_strength'] ** 0.3
         away_goal_exp = away_xg_adj * (home_xga_adj / league_avg_xga) ** 0.7 * away_data['attack_strength'] ** 0.3
-        
-        # Apply integrated home advantage
-        home_goal_exp += home_boost
         
         # Apply reality check to prevent unrealistic totals
         home_goal_exp, away_goal_exp = self._apply_goal_expectancy_reality_check(
@@ -506,12 +496,12 @@ class ProfessionalPredictionEngine:
         home_base = home_data['base_name']
         away_base = away_data['base_name']
         
-        # Enhanced home advantage insights using integrated data
+        # Enhanced home advantage insights using integrated data - NO BOOST
         home_adv = home_data['home_advantage']
         away_adv = away_data['home_advantage']
         
         if home_adv['strength'] == "strong":
-            insights.append(f"🏠 **STRONG HOME ADVANTAGE**: {home_base} performs much better at home (+{home_adv['ppg_diff']:.2f} PPG, {home_adv['goals_boost']:.3f} goal boost)")
+            insights.append(f"🏠 **STRONG HOME ADVANTAGE**: {home_base} performs much better at home (+{home_adv['ppg_diff']:.2f} PPG)")
         elif home_adv['strength'] == "weak":
             insights.append(f"🏠 **WEAK HOME FORM**: {home_base} struggles at home ({home_adv['ppg_diff']:+.2f} PPG difference)")
         
@@ -552,7 +542,7 @@ class ProfessionalPredictionEngine:
         return insights
 
     def predict_match_enhanced(self, inputs):
-        """Enhanced prediction using ONLY integrated data - COMPLETELY FIXED VERSION"""
+        """Enhanced prediction using ONLY integrated data - NO BOOST VERSION"""
         # Validate team selection
         validation_errors = self.validate_team_selection(inputs['home_team'], inputs['away_team'])
         if validation_errors:
@@ -565,7 +555,7 @@ class ProfessionalPredictionEngine:
         print(f"🔍 PREDICTION - Home: {home_data['base_name']} (xG: {home_data['xg_per_match']:.2f})")
         print(f"🔍 PREDICTION - Away: {away_data['base_name']} (xG: {away_data['xg_per_match']:.2f})")
         
-        # Calculate goal expectancy using integrated data only - FIXED
+        # Calculate goal expectancy using integrated data only - NO BOOST
         home_goal_exp, away_goal_exp = self._calculate_goal_expectancy_using_integrated_data(
             inputs['home_team'], inputs['away_team'],
             inputs['home_injuries'], inputs['away_injuries'],
