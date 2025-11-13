@@ -5,9 +5,15 @@ class HomeAdvantageCalculator:
         self.home_advantage_df = home_advantage_df
         
     def get_home_advantage(self, team_key):
-        """Get home advantage metrics for a specific team - FIXED FOR YOUR ACTUAL DATA"""
+        """Get home advantage metrics for a specific team - FIXED FOR YOUR DATA"""
+        print(f"🔍 HOME ADV LOOKUP - Looking for: {team_key}")
+        
         # Extract base name from team_key (e.g., "Arsenal Home" → "Arsenal")
         base_name = team_key.replace(" Home", "").replace(" Away", "")
+        print(f"🔍 HOME ADV LOOKUP - Base name: {base_name}")
+        
+        # Check what columns we actually have
+        print(f"🔍 HOME ADV COLUMNS: {list(self.home_advantage_df.columns)}")
         
         # Look up by base_name since your data uses team_base
         team_data = self.home_advantage_df[
@@ -15,21 +21,21 @@ class HomeAdvantageCalculator:
         ]
         
         if team_data.empty:
-            print(f"⚠️ No home advantage data found for {base_name} (looked up from: {team_key})")
+            print(f"⚠️ No home advantage data found for {base_name}")
             return {
                 'ppg_diff': 0.0,
                 'goals_boost': 0.3 * 0.33,  # Default moderate boost
                 'strength': 'moderate'
             }
         
-        # ✅ FIXED: Use YOUR actual column names
+        # ✅ USE YOUR ACTUAL COLUMN NAMES
         home_ppg = team_data['home_ppg'].iloc[0]
         away_ppg = team_data['away_ppg'].iloc[0]
         performance_diff = home_ppg - away_ppg  # Calculate the difference
         strength = team_data['advantage_strength'].iloc[0]
         goals_boost = performance_diff * 0.33  # Convert PPG difference to goals
         
-        print(f"🔍 HOME ADV FOUND - {base_name}: {home_ppg:.2f} home, {away_ppg:.2f} away, diff: {performance_diff:.2f}")
+        print(f"✅ HOME ADV FOUND - {base_name}: {home_ppg:.2f} home, {away_ppg:.2f} away, diff: {performance_diff:.2f}")
         
         return {
             'ppg_diff': performance_diff,
@@ -47,7 +53,6 @@ class HomeAdvantageCalculator:
         away_adv = self.get_home_advantage(away_home_key)
         
         # Base home advantage minus away team's ability to negate it
-        # Strong home teams are less affected by away disadvantage
         net_boost = home_adv['goals_boost'] - (away_adv['goals_boost'] * 0.3)
         
         return max(net_boost, 0.05)  # Minimum boost of 0.05
