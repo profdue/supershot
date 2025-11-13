@@ -560,34 +560,23 @@ def display_input_form(engine):
     return inputs, validation_errors
 
 def display_enhanced_predictions(engine, result, inputs):
-    """Display enhanced predictions with better accuracy"""
+    """Display enhanced predictions WITHOUT confidence labels"""
     st.markdown('<div class="section-header">🎯 Enhanced Predictions <span class="enhanced-badge">HIGH ACCURACY</span></div>', unsafe_allow_html=True)
     
     home_base = engine.get_team_base_name(inputs['home_team'])
     away_base = engine.get_team_base_name(inputs['away_team'])
     
-    # Winner Prediction with outcome-specific confidence
+    # Winner Prediction WITHOUT confidence
     st.markdown("#### 🏆 Match Winner")
     col1, col2, col3 = st.columns(3)
     
     winner_probs = result['enhanced_predictions']['winner']
-    
-    # Get outcome-specific confidences
-    if isinstance(result['confidence'], dict):
-        home_confidence = result['confidence']['home_win']
-        draw_confidence = result['confidence']['draw']
-        away_confidence = result['confidence']['away_win']
-    else:
-        home_confidence = result['confidence']
-        draw_confidence = result['confidence']
-        away_confidence = result['confidence']
     
     with col1:
         st.markdown('<div class="prediction-card">', unsafe_allow_html=True)
         home_prob = winner_probs['home_win']
         home_color = "🟢" if home_prob > 0.50 else "🟡" if home_prob > 0.35 else "🔴"
         st.metric(f"{home_color} {home_base} Win", f"{home_prob:.1%}")
-        st.write(f"**Confidence:** {home_confidence:.0f}%")
         if home_prob > 0.45:
             st.write("**✅ FAVORED**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -597,7 +586,6 @@ def display_enhanced_predictions(engine, result, inputs):
         draw_prob = winner_probs['draw']
         draw_color = "🟢" if draw_prob > 0.30 else "🟡" if draw_prob > 0.25 else "🔴"
         st.metric(f"{draw_color} Draw", f"{draw_prob:.1%}")
-        st.write(f"**Confidence:** {draw_confidence:.0f}%")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col3:
@@ -605,16 +593,14 @@ def display_enhanced_predictions(engine, result, inputs):
         away_prob = winner_probs['away_win']
         away_color = "🟢" if away_prob > 0.50 else "🟡" if away_prob > 0.35 else "🔴"
         st.metric(f"{away_color} {away_base} Win", f"{away_prob:.1%}")
-        st.write(f"**Confidence:** {away_confidence:.0f}%")
         if away_prob > 0.45:
             st.write("**✅ FAVORED**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Over/Under Predictions
+    # Over/Under Predictions WITHOUT confidence
     st.markdown("#### ⚽ Goals Market")
     
     over_under_probs = result['enhanced_predictions']['over_under']
-    ou_confidence = result['enhanced_predictions']['over_under']['confidence']
     
     col1, col2, col3 = st.columns(3)
     
@@ -623,7 +609,6 @@ def display_enhanced_predictions(engine, result, inputs):
         over_15 = over_under_probs['over_1.5']
         color_15 = "🟢" if over_15 > 0.70 else "🟡" if over_15 > 0.60 else "🔴"
         st.metric(f"{color_15} Over 1.5 Goals", f"{over_15:.1%}")
-        st.write(f"**Confidence:** {ou_confidence:.0f}%")
         if over_15 > 0.65:
             st.write("**📈 LIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -633,7 +618,6 @@ def display_enhanced_predictions(engine, result, inputs):
         over_25 = over_under_probs['over_2.5']
         color_25 = "🟢" if over_25 > 0.60 else "🟡" if over_25 > 0.50 else "🔴"
         st.metric(f"{color_25} Over 2.5 Goals", f"{over_25:.1%}")
-        st.write(f"**Confidence:** {ou_confidence:.0f}%")
         if over_25 > 0.55:
             st.write("**📈 LIKELY**")
         elif over_25 < 0.45:
@@ -645,16 +629,14 @@ def display_enhanced_predictions(engine, result, inputs):
         over_35 = over_under_probs['over_3.5']
         color_35 = "🟢" if over_35 > 0.40 else "🟡" if over_35 > 0.30 else "🔴"
         st.metric(f"{color_35} Over 3.5 Goals", f"{over_35:.1%}")
-        st.write(f"**Confidence:** {ou_confidence:.0f}%")
         if over_35 > 0.35:
             st.write("**⚡ HIGH SCORING**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # BTTS Prediction
+    # BTTS Prediction WITHOUT confidence
     st.markdown("#### 🎪 Both Teams To Score")
     
     btts_probs = result['enhanced_predictions']['btts']
-    btts_confidence = result['enhanced_predictions']['btts']['confidence']
     
     col1, col2 = st.columns(2)
     
@@ -663,7 +645,6 @@ def display_enhanced_predictions(engine, result, inputs):
         btts_yes = btts_probs['btts_yes']
         btts_color = "🟢" if btts_yes > 0.60 else "🟡" if btts_yes > 0.50 else "🔴"
         st.metric(f"{btts_color} BTTS: Yes", f"{btts_yes:.1%}")
-        st.write(f"**Confidence:** {btts_confidence:.0f}%")
         if btts_yes > 0.55:
             st.write("**🎯 LIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -673,7 +654,6 @@ def display_enhanced_predictions(engine, result, inputs):
         btts_no = btts_probs['btts_no']
         no_btts_color = "🟢" if btts_no > 0.60 else "🟡" if btts_no > 0.50 else "🔴"
         st.metric(f"{no_btts_color} BTTS: No", f"{btts_no:.1%}")
-        st.write(f"**Confidence:** {btts_confidence:.0f}%")
         if btts_no > 0.55:
             st.write("**🚫 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -711,7 +691,7 @@ def display_enhanced_predictions(engine, result, inputs):
                 st.write(f"- {factor.replace('_', ' ').title()}: {value}")
 
 def display_prediction_results(engine, result, inputs):
-    """Display prediction results with integrated data"""
+    """Display prediction results WITHOUT confidence references"""
     st.markdown('<div class="main-header">🎯 Enhanced Prediction Results</div>', unsafe_allow_html=True)
     
     # Get base team names for display
@@ -758,40 +738,15 @@ def display_prediction_results(engine, result, inputs):
     st.markdown(f'<h1 style="font-size: 4rem; margin: 1rem 0;">{expected_home:.2f} - {expected_away:.2f}</h1>', unsafe_allow_html=True)
     st.markdown('<p style="font-size: 1.2rem;">Expected Final Score (Enhanced Poisson-based)</p>', unsafe_allow_html=True)
     
-    # Overall confidence
-    confidence_data = result['confidence']
+    # Overall reliability (NOT confidence)
+    reliability_score = result['reliability_score']
+    reliability_level = result['reliability_level']
     
-    if isinstance(confidence_data, dict):
-        confidence_values = list(confidence_data.values())
-        avg_confidence = sum(confidence_values) / len(confidence_values)
-        confidence_stars = "★" * int((avg_confidence - 40) / 8) + "☆" * (5 - int((avg_confidence - 40) / 8))
-        confidence_text = "Low" if avg_confidence < 55 else "Medium" if avg_confidence < 70 else "High"
-        
-        st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
-        st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Confidence: {confidence_stars} ({avg_confidence:.0f}% - {confidence_text})</span>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Show outcome-specific confidence breakdown
-        with st.expander("🔍 Outcome-Specific Confidence Breakdown"):
-            st.write(f"**🏠 {home_base} Win:** {confidence_data['home_win']:.0f}% confidence")
-            st.write(f"**🤝 Draw:** {confidence_data['draw']:.0f}% confidence") 
-            st.write(f"**✈️ {away_base} Win:** {confidence_data['away_win']:.0f}% confidence")
-            
-    else:
-        confidence = confidence_data
-        confidence_stars = "★" * int((confidence - 40) / 8) + "☆" * (5 - int((confidence - 40) / 8))
-        confidence_text = "Low" if confidence < 55 else "Medium" if confidence < 65 else "High" if confidence < 75 else "Very High"
-        
-        st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
-        st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Confidence: {confidence_stars} ({confidence:.0f}% - {confidence_text})</span>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    reliability_stars = "★" * int((reliability_score - 40) / 8) + "☆" * (5 - int((reliability_score - 40) / 8))
     
-    # Show confidence factors on hover/expand
-    with st.expander("Confidence Breakdown"):
-        factors = result['confidence_factors']
-        st.write("**Confidence Factors:**")
-        for factor, value in factors.items():
-            st.write(f"- {factor.replace('_', ' ').title()}: {value:.1%}")
+    st.markdown(f'<div style="margin-top: 1rem;">', unsafe_allow_html=True)
+    st.markdown(f'<span style="background: rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">Overall Reliability: {reliability_stars} ({reliability_score:.0f}% - {reliability_level})</span>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -907,7 +862,7 @@ def display_prediction_results(engine, result, inputs):
         st.write("- Team-specific home advantage modeling")
         st.write("- Enhanced Poisson distribution with quality and form factors")
         st.write("- Injury impact modeling (5-15% realistic impacts)")
-        st.write("- Confidence scoring for each prediction type")
+        st.write("- Reliability scoring for overall prediction quality")
         
         if 'calculation_details' in result:
             details = result['calculation_details']
