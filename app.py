@@ -284,11 +284,11 @@ def display_enhanced_team_info(engine, team_key, is_home=True):
     trend_emoji = "↗️" if team_data['form_trend'] > 0.02 else "↘️" if team_data['form_trend'] < -0.02 else "➡️"
     st.write(f"**Form Trend:** {trend_emoji} {team_data['form_trend']:.3f}")
     
-    # Home advantage for home teams, away performance for away teams
+    # Home advantage for home teams, away performance for away teams - NO BOOST
     if is_home:
         home_adv = team_data['home_advantage']
         advantage_class = f"{home_adv['strength']}-advantage"
-        st.write(f"**Home Advantage:** <span class='advantage-indicator {advantage_class}'>{home_adv['strength'].upper()}</span> (+{home_adv['goals_boost']:.3f} goals)", unsafe_allow_html=True)
+        st.write(f"**Home Advantage:** <span class='advantage-indicator {advantage_class}'>{home_adv['strength'].upper()}</span> (Natural advantage from home performance data)", unsafe_allow_html=True)
     else:
         location = team_data.get('location', 'away')
         away_performance = "Good" if team_data['xg_per_match'] > 1.4 else "Average" if team_data['xg_per_match'] > 1.0 else "Poor"
@@ -354,7 +354,7 @@ def display_input_form(engine):
         st.subheader("📊 League Overview")
         st.write(f"**Selected:** <span class='league-badge'>{selected_league}</span>", unsafe_allow_html=True)
         st.write(f"**Data Quality:** ✅ Home/Away specific xG data")
-        st.write(f"**Home Advantage:** ✅ Team-specific modeling")
+        st.write(f"**Home Advantage:** ✅ Natural advantage from home performance data")
         st.write(f"**Injury Model:** ✅ REALISTIC 5-15% player impact")
         st.write(f"**Validation:** Same-team and cross-league prevention")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -881,7 +881,7 @@ def display_prediction_results(engine, result, inputs):
     with st.expander("🔧 Technical Details"):
         st.write("**Enhanced Prediction Methodology:**")
         st.write("- Integrated data from multiple sources (xG, ELO, form, BTTS, clean sheets)")
-        st.write("- Team-specific home advantage modeling")
+        st.write("- Team-specific home performance data (natural home advantage included)")
         st.write("- Enhanced Poisson distribution with quality and form factors")
         st.write("- Injury impact modeling (5-15% realistic impacts)")
         st.write("- Reliability scoring for overall prediction quality")
