@@ -660,31 +660,35 @@ def display_enhanced_predictions(engine, result, inputs):
             st.write("**🚫 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Key Factors - UPDATED SECTION
+    # Key Factors - UPDATED SECTION WITH ERROR HANDLING
     st.markdown("---")
     st.markdown('<div class="section-header">🔍 Prediction Key Factors</div>', unsafe_allow_html=True)
     
     with st.expander("View Detailed Factors"):
-        # Weight Configuration
-        st.write("**⚖️ Weight Configuration:**")
         winner_factors = result['enhanced_predictions']['winner']['key_factors']
-        st.write(f"- **Performance (Recent Form):** {winner_factors['performance_weight']:.1%}")
-        st.write(f"- **Quality (Structural):** {winner_factors['quality_weight']:.1%}")
+        
+        # Weight Configuration with safe access
+        st.write("**⚖️ Weight Configuration:**")
+        performance_weight = winner_factors.get('performance_weight', 0.6)
+        quality_weight = winner_factors.get('quality_weight', 0.4)
+        st.write(f"- **Performance (Recent Form):** {performance_weight:.1%}")
+        st.write(f"- **Quality (Structural):** {quality_weight:.1%}")
         
         if 'sample_size_note' in winner_factors:
             st.write(f"- **Sample Size Note:** {winner_factors['sample_size_note']}")
         
-        # Context Factors
+        # Context Factors with safe access
         st.write("**🎯 Context Factors:**")
-        st.write(f"- **League:** {winner_factors['league']}")
-        st.write(f"- **Home Injuries:** {winner_factors['injury_home']}")
-        st.write(f"- **Away Injuries:** {winner_factors['injury_away']}")
-        st.write(f"- **Elo Difference:** {winner_factors['elo_diff']:+.0f}")
+        st.write(f"- **League:** {winner_factors.get('league', 'Unknown')}")
+        st.write(f"- **Home Injuries:** {winner_factors.get('injury_home', 'None')}")
+        st.write(f"- **Away Injuries:** {winner_factors.get('injury_away', 'None')}")
+        st.write(f"- **Elo Difference:** {winner_factors.get('elo_diff', 0):+.0f}")
         
         # Winner factors
         st.write("**🏆 Winner Prediction Factors:**")
+        excluded_keys = ['performance_weight', 'quality_weight', 'league', 'injury_home', 'injury_away', 'elo_diff', 'sample_size_note']
         for factor, value in winner_factors.items():
-            if factor not in ['performance_weight', 'quality_weight', 'league', 'injury_home', 'injury_away', 'elo_diff', 'sample_size_note']:
+            if factor not in excluded_keys:
                 if isinstance(value, (int, float)):
                     st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
                 else:
