@@ -12,7 +12,6 @@ class EnhancedPredictor:
 
     def __init__(self, data_integrator):
         self.data_integrator = data_integrator
-        self.confidence_calculator = None  # Will be set by engine
 
     def _get_correct_team_data(self, team_key: str, is_home: bool) -> dict:
         """✅ FIXED: Get correct home/away team data based on context"""
@@ -103,13 +102,11 @@ class EnhancedPredictor:
         # 7) Normalise to ensure numeric stability
         home_prob, draw_prob, away_prob = self._normalize_triple(home_prob, draw_prob, away_prob)
 
-        # 8) Confidence and package result
-        confidence = self._calculate_winner_confidence(home_prob, draw_prob, away_prob, home_data, away_data)
+        # 8) Package result WITHOUT CONFIDENCE
         result = {
             "home_win": round(home_prob, 4),
             "draw": round(draw_prob, 4),
             "away_win": round(away_prob, 4),
-            "confidence": int(confidence),
             "expected_goals": {"home": round(home_goal_exp, 3), "away": round(away_goal_exp, 3)},
             "key_factors": {
                 "poisson_weight": round(poisson_weight, 3),
@@ -165,20 +162,6 @@ class EnhancedPredictor:
         over_15 = float(np.clip(over_15 * consistency_factor, 0.02, 0.995))
         over_35 = float(np.clip(over_35 * consistency_factor, 0.01, 0.95))
 
-        # 🚨 CRITICAL FIX: Use the enhanced confidence calculator
-        if self.confidence_calculator:
-            confidence_15 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_15, "over_1.5")
-            confidence_25 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_25, "over_2.5")
-            confidence_35 = self.confidence_calculator.calculate_goal_market_confidence(total_lambda, over_35, "over_3.5")
-        else:
-            # Fallback to basic confidence
-            confidence_15 = self._calculate_over_under_confidence(total_lambda, over_15, "over_1.5")
-            confidence_25 = self._calculate_over_under_confidence(total_lambda, over_25, "over_2.5")
-            confidence_35 = self._calculate_over_under_confidence(total_lambda, over_35, "over_3.5")
-
-        # Use over_2.5 as the main confidence for backward compatibility
-        confidence = confidence_25
-
         return {
             "over_1.5": round(over_15, 4),
             "over_2.5": round(over_25, 4),
@@ -187,7 +170,6 @@ class EnhancedPredictor:
             "under_2.5": round(1 - over_25, 4),
             "under_3.5": round(1 - over_35, 4),
             "expected_total_goals": round(total_lambda, 3),
-            "confidence": int(confidence),
             "key_factors": {"total_lambda": round(total_lambda, 3), "defense_consistency": round(defense_consistency, 3)},
         }
 
@@ -228,18 +210,9 @@ class EnhancedPredictor:
         btts_prob = blend_weight_hist * historical_avg + (1 - blend_weight_hist) * poisson_btts
         btts_prob = float(np.clip(btts_prob, 0.05, 0.95))
 
-        # 🚨 USE THE ENHANCED CONFIDENCE CALCULATOR
-        if self.confidence_calculator and hasattr(self.confidence_calculator, 'calculate_btts_confidence'):
-            confidence = self.confidence_calculator.calculate_btts_confidence(
-                btts_prob, home_data, away_data, home_goal_exp, away_goal_exp
-            )
-        else:
-            confidence = self._calculate_btts_confidence(home_data, away_data, home_goal_exp, away_goal_exp)
-
         return {
             "btts_yes": round(btts_prob, 4),
             "btts_no": round(1.0 - btts_prob, 4),
-            "confidence": int(confidence),
             "key_factors": {"historical_btts": round(historical_avg, 3), "poisson_btts": round(poisson_btts, 3)},
         }
 
@@ -425,77 +398,6 @@ class EnhancedPredictor:
             "away_attack": float(away_adj["attack_mult"]),
             "away_defense": float(away_adj["defense_mult"]),
         }
-
-    # 🚨 UPDATED CONFIDENCE METHODS - Now use the enhanced calculator when available
-    def _calculate_over_under_confidence(self, total_goals: float, probability: float, market_type: str = "over_2.5") -> float:
-        """Fallback confidence calculation if enhanced calculator not available"""
-        if market_type == "over_1.5":
-            if probability >= 0.90: return 82
-            elif probability >= 0.80: return 75
-            elif probability >= 0.65: return 68
-            elif probability >= 0.50: return 60
-            else: return 50
-        elif market_type == "over_2.5":
-            if probability >= 0.80: return 78
-            elif probability >= 0.70: return 72
-            elif probability >= 0.55: return 65
-            elif probability >= 0.40: return 58
-            else: return 48
-        else:  # over_3.5
-            if probability >= 0.70: return 75
-            elif probability >= 0.60: return 68
-            elif probability >= 0.45: return 60
-            elif probability >= 0.30: return 52
-            else: return 42
-
-    def _calculate_winner_confidence(self, home_prob: float, draw_prob: float, away_prob: float, home_data: dict, away_data: dict) -> float:
-        """Calculate winner confidence - uses enhanced calculator when available"""
-        # If we have the enhanced confidence calculator, use it properly
-        if self.confidence_calculator:
-            # Create a mock inputs dict for the confidence calculator
-            mock_inputs = {
-                'home_injuries': 'None',  # These would be set by the engine
-                'away_injuries': 'None',
-                'home_rest': 7,
-                'away_rest': 7
-            }
-            
-            probabilities = {
-                'home_win': home_prob,
-                'draw': draw_prob, 
-                'away_win': away_prob
-            }
-            
-            outcome_confidences, _ = self.confidence_calculator.calculate_outcome_specific_confidence(
-                probabilities, home_data, away_data, mock_inputs
-            )
-            
-            # Return the highest confidence among the outcomes
-            return max(outcome_confidences.values())
-        
-        # Fallback: simple probability-based confidence
-        max_prob = max(home_prob, draw_prob, away_prob)
-        if max_prob > 0.60:
-            return 75
-        elif max_prob > 0.45:
-            return 65
-        elif max_prob > 0.35:
-            return 55
-        else:
-            return 45
-
-    def _calculate_btts_confidence(self, home_data: dict, away_data: dict, home_goal_exp: float, away_goal_exp: float) -> float:
-        """
-        Confidence for BTTS - LEGACY METHOD (used if enhanced calculator not available)
-        """
-        prob_home = 1.0 - poisson.cdf(0, home_goal_exp)
-        prob_away = 1.0 - poisson.cdf(0, away_goal_exp)
-        poisson_btts = prob_home * prob_away
-        dist = abs(poisson_btts - 0.5)
-        base = 45.0 + dist * 90.0
-        hist = (home_data.get("btts_pct", 50) + away_data.get("btts_pct", 50)) / 2.0
-        base += (abs(hist - 50.0) / 50.0) * 10.0
-        return float(np.clip(base, 30.0, 95.0))
 
     # -------------------------
     # Utility & scoring helpers
