@@ -1,6 +1,6 @@
 class InjuryAnalyzer:
     def __init__(self):
-        # MORE CONSERVATIVE injury impacts (7-20% vs 10-28%)
+        # CONSERVATIVE injury impacts (6-18% vs 10-28%)
         self.injury_weights = {
             "None": {
                 "attack_mult": 1.00, "defense_mult": 1.00,
@@ -11,15 +11,15 @@ class InjuryAnalyzer:
                 "description": "1-2 rotational players missing", "impact_level": "Low"
             },
             "Moderate": {
-                "attack_mult": 0.93, "defense_mult": 0.90,  # 7-10% impact  
+                "attack_mult": 0.94, "defense_mult": 0.92,  # 6-8% impact  
                 "description": "1-2 key starters missing", "impact_level": "Medium"
             },
             "Significant": {
-                "attack_mult": 0.88, "defense_mult": 0.85,  # 12-15% impact
+                "attack_mult": 0.90, "defense_mult": 0.88,  # 10-12% impact
                 "description": "3-4 key starters missing", "impact_level": "High"
             },
             "Crisis": {
-                "attack_mult": 0.80, "defense_mult": 0.78,  # 20-22% impact
+                "attack_mult": 0.85, "defense_mult": 0.82,  # 15-18% impact
                 "description": "5+ key starters missing", "impact_level": "Severe"
             }
         }
@@ -57,6 +57,12 @@ class InjuryAnalyzer:
         attack_diff = team1_data['attack_mult'] - team2_data['attack_mult']
         defense_diff = team1_data['defense_mult'] - team2_data['defense_mult']
         return (0.4 * attack_diff + 0.6 * defense_diff)
+
+    def has_significant_injury_gap(self, home_injuries, away_injuries):
+        """Check if injury difference is significant (2+ levels)"""
+        injury_levels = {"None": 0, "Minor": 1, "Moderate": 2, "Significant": 3, "Crisis": 4}
+        gap = abs(injury_levels[home_injuries] - injury_levels[away_injuries])
+        return gap >= 2
 
     def get_injury_impact_summary(self, injury_level):
         data = self.injury_weights.get(injury_level, self.injury_weights['None'])
