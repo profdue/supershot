@@ -672,25 +672,14 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # 🚨 SIMPLE CONFIDENCE BASED ON PROBABILITIES
-        outcome_confidences = {
-            'home_win': min(85, max(35, probabilities['home_win'] * 100)),
-            'draw': min(75, max(25, probabilities['draw'] * 100)),
-            'away_win': min(85, max(35, probabilities['away_win'] * 100))
-        }
-        confidence_factors = {
-            'data_quality': 1.0,
-            'predictability': 0.63, 
-            'injury_stability': 1.0,
-            'rest_balance': 1.0,
-            'home_advantage_consistency': 0.95
-        }
-        
-        # 🚨 CRITICAL FIX: Proper reliability calculation
-        avg_confidence = np.mean(list(outcome_confidences.values()))
-        reliability_level = 'High' if avg_confidence > 70 else 'Moderate' if avg_confidence > 55 else 'Low'
+        # Simplified reliability calculation
+        if self.enhanced_predictor:
+            reliability_score = min(95, (winner_prediction['confidence'] + over_under_prediction['confidence']) / 2)
+        else:
+            reliability_score = 60  # Basic mode default
+
+        reliability_level = 'High' if reliability_score > 70 else 'Moderate' if reliability_score > 55 else 'Low'
         reliability_advice = f'Enhanced predictions provide {reliability_level.lower()} reliability'
-        reliability_score = min(95, avg_confidence * 0.9)
         
         # Enhanced calculation details
         calculation_details = {
@@ -702,11 +691,10 @@ class ProfessionalPredictionEngine:
             'key_factors_over_under': over_under_prediction['key_factors'],
             'key_factors_btts': btts_prediction['key_factors'],
             'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions',
-            'outcome_specific_confidences': outcome_confidences,
             'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
         
-        # Combine all predictions
+        # Combine all probabilities
         combined_probabilities = {
             **probabilities,
             'over_1.5': over_under_prediction['over_1.5'],
@@ -722,8 +710,6 @@ class ProfessionalPredictionEngine:
             'probabilities': combined_probabilities,
             'expected_goals': winner_prediction['expected_goals'],
             'value_bets': value_bets,
-            'confidence': outcome_confidences,
-            'confidence_factors': confidence_factors,
             'enhanced_predictions': {
                 'winner': winner_prediction,
                 'over_under': over_under_prediction,
@@ -735,7 +721,7 @@ class ProfessionalPredictionEngine:
                 'away': away_data
             },
             'calculation_details': calculation_details,
-            # 🚨 FIXED: Proper reliability calculation
+            # Simplified reliability information
             'reliability_score': reliability_score,
             'reliability_level': reliability_level,
             'reliability_advice': reliability_advice
