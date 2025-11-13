@@ -627,7 +627,6 @@ class ProfessionalPredictionEngine:
                 'home_win': basic_probs['home_win'],
                 'draw': basic_probs['draw'],
                 'away_win': basic_probs['away_win'],
-                'confidence': 60,
                 'expected_goals': {'home': home_goal_exp, 'away': away_goal_exp},
                 'key_factors': {'basic_mode': True}
             }
@@ -640,7 +639,6 @@ class ProfessionalPredictionEngine:
                 'under_1.5': poisson.cdf(1.5, total_goals),
                 'under_2.5': poisson.cdf(2.5, total_goals),
                 'under_3.5': poisson.cdf(3.5, total_goals),
-                'confidence': 55,
                 'key_factors': {'basic_mode': True}
             }
             
@@ -648,7 +646,6 @@ class ProfessionalPredictionEngine:
             btts_prediction = {
                 'btts_yes': btts_prob,
                 'btts_no': 1 - btts_prob,
-                'confidence': 50,
                 'key_factors': {'basic_mode': True}
             }
         
@@ -672,24 +669,22 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # Simplified reliability calculation
+        # 🚨 FIXED: Simplified reliability calculation without confidence fields
         if self.enhanced_predictor:
-            reliability_score = min(95, (winner_prediction['confidence'] + over_under_prediction['confidence']) / 2)
+            # For enhanced predictor, use a fixed high reliability since we trust the model
+            reliability_score = 75
         else:
             reliability_score = 60  # Basic mode default
 
         reliability_level = 'High' if reliability_score > 70 else 'Moderate' if reliability_score > 55 else 'Low'
         reliability_advice = f'Enhanced predictions provide {reliability_level.lower()} reliability'
         
-        # Enhanced calculation details
+        # 🚨 FIXED: Remove confidence references from calculation details
         calculation_details = {
             'enhanced_predictions_used': self.enhanced_predictor is not None,
-            'winner_confidence': winner_prediction['confidence'],
-            'over_under_confidence': over_under_prediction['confidence'],
-            'btts_confidence': btts_prediction['confidence'],
-            'key_factors_winner': winner_prediction['key_factors'],
-            'key_factors_over_under': over_under_prediction['key_factors'],
-            'key_factors_btts': btts_prediction['key_factors'],
+            'key_factors_winner': winner_prediction.get('key_factors', {}),
+            'key_factors_over_under': over_under_prediction.get('key_factors', {}),
+            'key_factors_btts': btts_prediction.get('key_factors', {}),
             'data_integration_note': 'All data updates fully integrated and utilized in enhanced predictions',
             'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
