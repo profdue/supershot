@@ -61,20 +61,38 @@ class DataIntegrator:
                 }
                 
     def _integrate_home_advantage_data(self):
-        """Integrate home advantage data with proper mapping"""
+        """Integrate home advantage data with proper mapping - FIXED"""
         if 'home_advantage' in self.engine.data:
             df = self.engine.data['home_advantage']
+            print(f"🔍 HOME ADVANTAGE DATA COLUMNS: {list(df.columns)}")
+            
             for _, row in df.iterrows():
-                team_key = row['team_key']
+                # ✅ FIX: Use the correct column name from your data
+                team_base = row['team_base']
                 
-                performance_diff = row['performance_difference']
+                # Calculate performance difference from home/away PPG
+                home_ppg = row['home_ppg']
+                away_ppg = row['away_ppg']
+                performance_diff = home_ppg - away_ppg
+                
                 strength = row['advantage_strength']
                 goals_boost = performance_diff * 0.33
                 
-                self.home_advantage_data[team_key] = {
+                # Store with both home and away keys for lookup
+                home_key = f"{team_base} Home"
+                away_key = f"{team_base} Away"
+                
+                self.home_advantage_data[home_key] = {
                     'ppg_diff': performance_diff,
                     'goals_boost': goals_boost,
                     'strength': strength
+                }
+                
+                # Away teams get default/weaker advantage
+                self.home_advantage_data[away_key] = {
+                    'ppg_diff': 0.0,  # Away teams don't get home advantage
+                    'goals_boost': 0.0,
+                    'strength': 'weak'
                 }
                 
     def _integrate_team_quality_data(self):
@@ -223,31 +241,50 @@ class ProfessionalPredictionEngine:
         """Initialize all components with proper data integration - FIXED"""
         print("🚀 Initializing Professional Prediction Engine...")
         
-        # Load all data
-        self.data = self.data_loader.load_all_data()
-        
-        if not self.data or any(v is None for v in self.data.values()):
-            raise Exception("Failed to load required data files")
+        try:
+            # Load all data
+            self.data = self.data_loader.load_all_data()
             
-        # Initialize data integrator FIRST
-        self.data_integrator = DataIntegrator(self)
-        self.data_integrator.integrate_all_data()
-        self.comprehensive_database = self.data_integrator.comprehensive_database
+            if not self.data or any(v is None for v in self.data.values()):
+                raise Exception("Failed to load required data files")
+                
+            # 🚨 DEBUG: Check what we actually loaded
+            print("🔍 LOADED DATA FILES:")
+            for key, df in self.data.items():
+                if df is not None:
+                    print(f"  {key}: {len(df)} rows, columns: {list(df.columns)}")
+                else:
+                    print(f"  {key}: None")
             
-        # Initialize analyzers with integrated data
-        self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
-        self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
-        self.injury_analyzer = InjuryAnalyzer()
-        self.poisson_calculator = PoissonCalculator()
-        self.value_calculator = ValueCalculator()
-        
-        # Initialize enhanced predictor if available
-        if ENHANCED_PREDICTOR_AVAILABLE:
-            self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
-            print("✅ Prediction engine initialized with enhanced predictors!")
-        else:
-            self.enhanced_predictor = None
-            print("✅ Prediction engine initialized (basic mode)")
+            # Initialize data integrator FIRST
+            self.data_integrator = DataIntegrator(self)
+            self.data_integrator.integrate_all_data()
+            self.comprehensive_database = self.data_integrator.comprehensive_database
+            print("✅ Data integration complete")
+                
+            # Initialize analyzers with integrated data
+            self.team_quality = TeamQualityAnalyzer(self.data['team_quality'])
+            print("✅ Team quality initialized")
+            
+            self.home_advantage = HomeAdvantageCalculator(self.data['home_advantage'])
+            print("✅ Home advantage initialized")
+            
+            self.injury_analyzer = InjuryAnalyzer()
+            self.poisson_calculator = PoissonCalculator()
+            self.value_calculator = ValueCalculator()
+            
+            # Initialize enhanced predictor if available
+            if ENHANCED_PREDICTOR_AVAILABLE:
+                self.enhanced_predictor = EnhancedPredictor(self.data_integrator)
+                print("✅ Prediction engine initialized with enhanced predictors!")
+            else:
+                self.enhanced_predictor = None
+                print("✅ Prediction engine initialized (basic mode)")
+            
+        except Exception as e:
+            print(f"🚨 INITIALIZATION FAILED: {e}")
+            print(f"🚨 ERROR TYPE: {type(e)}")
+            raise
         
     # PUBLIC PROPERTIES FOR THE APP TO USE
     @property
