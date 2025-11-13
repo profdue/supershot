@@ -257,7 +257,8 @@ class EnhancedPredictor:
     ) -> Tuple[float, float]:
         """
         🚨 PURE xG-based goal counting - NO ELO INFLUENCE
-        Just: (team xG) × (opponent defensive weakness) + home advantage
+        Just: (team xG) × (opponent defensive weakness)
+        HOME ADVANTAGE IS ALREADY IN THE xG DATA - DO NOT ADD AGAIN!
         """
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
@@ -270,13 +271,16 @@ class EnhancedPredictor:
         home_goal_exp = home_xg * (away_xga / league_avg)
         away_goal_exp = away_xg * (home_xga / league_avg)
 
-        # Home advantage boost (small additive)
-        home_adv = float(home_data.get("home_advantage", {}).get("goals_boost", 0.0))
-        home_goal_exp += home_adv
+        # 🚨 CRITICAL FIX: REMOVE HOME ADVANTAGE BOOST - IT'S ALREADY IN THE xG DATA!
+        # home_adv = float(home_data.get("home_advantage", {}).get("goals_boost", 0.0))
+        # home_goal_exp += home_adv  # ← REMOVE THIS LINE!
 
         # Ensure realistic minimums
         home_goal_exp = max(0.1, home_goal_exp)
         away_goal_exp = max(0.1, away_goal_exp)
+
+        # Debug output to verify no double home advantage
+        print(f"🔍 GOAL VERIFICATION - Home: {home_xg:.2f} → {home_goal_exp:.2f}, Away: {away_xg:.2f} → {away_goal_exp:.2f}")
 
         return home_goal_exp, away_goal_exp
 
@@ -286,19 +290,29 @@ class EnhancedPredictor:
         """
         total_goals = home_goal_exp + away_goal_exp
         
-        # Premier League reality: matches rarely exceed 3.8 expected goals
-        if total_goals > 3.8:
-            print(f"🚨 FINAL REALITY CHECK: Total goals {total_goals:.2f} > 3.8. Applying correction.")
-            damping = 3.8 / total_goals
+        # Premier League reality: matches rarely exceed 4.0 expected goals
+        if total_goals > 4.0:
+            print(f"🚨 FINAL REALITY CHECK: Total goals {total_goals:.2f} > 4.0. Applying correction.")
+            damping = 4.0 / total_goals
             home_goal_exp *= damping
             away_goal_exp *= damping
         
-        # Individual team limits based on historical reality
-        if home_goal_exp > 2.2:
+        # Individual team limits based on team quality
+        home_tier = home_data['base_quality']['structural_tier']
+        away_tier = away_data['base_quality']['structural_tier']
+        
+        # Elite teams can score more
+        if home_tier == 'elite' and home_goal_exp > 2.5:
+            home_goal_exp = min(home_goal_exp, 2.8)  # Allow elite home teams to 2.8
+            print(f"🚨 FINAL REALITY CHECK: Elite home goals capped at 2.8")
+        elif home_goal_exp > 2.2:
             home_goal_exp = min(home_goal_exp, 2.2)
             print(f"🚨 FINAL REALITY CHECK: Home goals capped at 2.2")
         
-        if away_goal_exp > 1.7:  # Away teams typically score less
+        if away_tier == 'elite' and away_goal_exp > 2.0:
+            away_goal_exp = min(away_goal_exp, 2.3)  # Allow elite away teams to 2.3
+            print(f"🚨 FINAL REALITY CHECK: Elite away goals capped at 2.3")
+        elif away_goal_exp > 1.7:
             away_goal_exp = min(away_goal_exp, 1.7)
             print(f"🚨 FINAL REALITY CHECK: Away goals capped at 1.7")
         
