@@ -257,7 +257,6 @@ class EnhancedPredictor:
     ) -> Tuple[float, float]:
         """
         🚨 PURE xG-based goal counting - NO ELO INFLUENCE
-        Just: (team xG) × (opponent defensive weakness)
         HOME ADVANTAGE IS ALREADY IN THE xG DATA - DO NOT ADD AGAIN!
         """
         home_data = self._get_correct_team_data(home_team, is_home=True)
@@ -271,16 +270,16 @@ class EnhancedPredictor:
         home_goal_exp = home_xg * (away_xga / league_avg)
         away_goal_exp = away_xg * (home_xga / league_avg)
 
-        # 🚨 CRITICAL FIX: REMOVE HOME ADVANTAGE BOOST - IT'S ALREADY IN THE xG DATA!
+        # 🚨 CRITICAL FIX: COMPLETELY REMOVE HOME ADVANTAGE BOOST
         # home_adv = float(home_data.get("home_advantage", {}).get("goals_boost", 0.0))
-        # home_goal_exp += home_adv  # ← REMOVE THIS LINE!
+        # home_goal_exp += home_adv  # ← THIS WAS CAUSING DOUBLE COUNTING
 
         # Ensure realistic minimums
         home_goal_exp = max(0.1, home_goal_exp)
         away_goal_exp = max(0.1, away_goal_exp)
 
         # Debug output to verify no double home advantage
-        print(f"🔍 GOAL VERIFICATION - Home: {home_xg:.2f} → {home_goal_exp:.2f}, Away: {away_xg:.2f} → {away_goal_exp:.2f}")
+        print(f"🔍 PURE XG - Home: {home_xg:.2f} → {home_goal_exp:.2f}, Away: {away_xg:.2f} → {away_goal_exp:.2f}")
 
         return home_goal_exp, away_goal_exp
 
