@@ -649,6 +649,12 @@ class ProfessionalPredictionEngine:
             'home_advantage_consistency': 0.95
         }
         
+        # 🚨 CRITICAL FIX: Proper reliability calculation
+        avg_confidence = np.mean(list(outcome_confidences.values()))
+        reliability_level = 'High' if avg_confidence > 70 else 'Moderate' if avg_confidence > 55 else 'Low'
+        reliability_advice = f'Enhanced predictions provide {reliability_level.lower()} reliability'
+        reliability_score = min(95, avg_confidence * 0.9)
+        
         # Enhanced calculation details
         calculation_details = {
             'enhanced_predictions_used': self.enhanced_predictor is not None,
@@ -692,10 +698,10 @@ class ProfessionalPredictionEngine:
                 'away': away_data
             },
             'calculation_details': calculation_details,
-            # Calculate overall reliability based on average confidence
-            'reliability_score': min(95, np.mean(list(outcome_confidences.values())) * 0.9),
-            'reliability_level': 'High' if np.mean(list(outcome_confidences.values())) > 70 else 'Moderate' if np.mean(list(outcome_confidences.values())) > 55 else 'Low',
-            'reliability_advice': 'Enhanced predictions using all integrated data provide high reliability'
+            # 🚨 FIXED: Proper reliability calculation
+            'reliability_score': reliability_score,
+            'reliability_level': reliability_level,
+            'reliability_advice': reliability_advice
         }
         
         # Apply sanity checks as final defense
