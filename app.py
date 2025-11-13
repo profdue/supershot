@@ -660,19 +660,35 @@ def display_enhanced_predictions(engine, result, inputs):
             st.write("**🚫 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Key Factors
+    # Key Factors - UPDATED SECTION
     st.markdown("---")
     st.markdown('<div class="section-header">🔍 Prediction Key Factors</div>', unsafe_allow_html=True)
     
     with st.expander("View Detailed Factors"):
-        # Winner factors
-        st.write("**🎯 Winner Prediction Factors:**")
+        # Weight Configuration
+        st.write("**⚖️ Weight Configuration:**")
         winner_factors = result['enhanced_predictions']['winner']['key_factors']
+        st.write(f"- **Performance (Recent Form):** {winner_factors['performance_weight']:.1%}")
+        st.write(f"- **Quality (Structural):** {winner_factors['quality_weight']:.1%}")
+        
+        if 'sample_size_note' in winner_factors:
+            st.write(f"- **Sample Size Note:** {winner_factors['sample_size_note']}")
+        
+        # Context Factors
+        st.write("**🎯 Context Factors:**")
+        st.write(f"- **League:** {winner_factors['league']}")
+        st.write(f"- **Home Injuries:** {winner_factors['injury_home']}")
+        st.write(f"- **Away Injuries:** {winner_factors['injury_away']}")
+        st.write(f"- **Elo Difference:** {winner_factors['elo_diff']:+.0f}")
+        
+        # Winner factors
+        st.write("**🏆 Winner Prediction Factors:**")
         for factor, value in winner_factors.items():
-            if isinstance(value, (int, float)):
-                st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
-            else:
-                st.write(f"- {factor.replace('_', ' ').title()}: {value}")
+            if factor not in ['performance_weight', 'quality_weight', 'league', 'injury_home', 'injury_away', 'elo_diff', 'sample_size_note']:
+                if isinstance(value, (int, float)):
+                    st.write(f"- {factor.replace('_', ' ').title()}: {value:.3f}")
+                else:
+                    st.write(f"- {factor.replace('_', ' ').title()}: {value}")
         
         # Over/Under factors
         st.write("**⚽ Over/Under Prediction Factors:**")
