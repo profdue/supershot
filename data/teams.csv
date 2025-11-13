@@ -31,8 +31,8 @@ West Ham Home,Premier League,6.88,13.66,6,-0.08,home,9,55,-10
 West Ham Away,Premier League,4.93,7.63,5,-0.08,away,9,55,-10
 Sunderland Home,Premier League,6.64,6.96,6,0.06,home,36,45,4
 Sunderland Away,Premier League,5.77,7.33,5,0.06,away,36,45,4
-Leeds Home,Premier League,8.81,3.23,5,0.02,home,18,45,-10
-Leeds Away,Premier League,4.55,11.09,6,0.02,away,18,45,-10
+Leeds United Home,Premier League,8.81,3.23,5,0.02,home,18,45,-10
+Leeds United Away,Premier League,4.55,11.09,6,0.02,away,18,45,-10
 Wolverhampton Wanderers Home,Premier League,5.98,7.73,5,0.01,home,0,45,-18
 Wolverhampton Wanderers Away,Premier League,2.91,10.72,6,0.01,away,0,45,-18
 Bournemouth Home,Premier League,5.77,2.30,5,0.12,home,36,55,-1
@@ -79,8 +79,8 @@ Levante Home,La Liga,7.59,13.20,5,0.00,home,17,67,-7
 Levante Away,La Liga,12.76,10.41,7,0.00,away,17,67,-7
 Bayern Munich Home,Bundesliga,15.76,3.17,5,0.11,home,60,40,29
 Bayern Munich Away,Bundesliga,12.31,3.89,5,0.11,away,60,40,29
-RasenBallsport Leipzig Home,Bundesliga,9.98,4.73,4,0.13,home,40,50,7
-RasenBallsport Leipzig Away,Bundesliga,10.03,9.90,6,0.13,away,40,50,7
+RB Leipzig Home,Bundesliga,9.98,4.73,4,0.13,home,40,50,7
+RB Leipzig Away,Bundesliga,10.03,9.90,6,0.13,away,40,50,7
 VfB Stuttgart Home,Bundesliga,8.93,6.27,5,0.09,home,40,60,5
 VfB Stuttgart Away,Bundesliga,8.02,5.42,5,0.09,away,40,60,5
 Bayer Leverkusen Home,Bundesliga,15.04,4.40,6,0.07,home,30,60,10
@@ -105,14 +105,14 @@ FC Augsburg Home,Bundesliga,4.74,10.45,5,-0.12,home,0,80,-10
 FC Augsburg Away,Bundesliga,5.88,8.99,5,-0.12,away,0,80,-10
 Wolfsburg Home,Bundesliga,6.81,10.29,5,-0.14,home,10,60,-6
 Wolfsburg Away,Bundesliga,6.15,7.88,5,-0.14,away,10,60,-6
-Borussia M.Gladbach Home,Bundesliga,8.43,11.82,6,-0.18,home,30,40,-6
-Borussia M.Gladbach Away,Bundesliga,7.16,5.21,4,-0.18,away,30,40,-6
+Borussia Monchengladbach Home,Bundesliga,8.43,11.82,6,-0.18,home,30,40,-6
+Borussia Monchengladbach Away,Bundesliga,7.16,5.21,4,-0.18,away,30,40,-6
 Hamburger SV Home,Bundesliga,8.55,7.20,5,-0.04,home,30,40,-7
 Hamburger SV Away,Bundesliga,4.44,10.63,5,-0.04,away,30,40,-7
 Sankt Pauli Home,Bundesliga,5.91,9.74,5,-0.10,home,10,40,-11
 Sankt Pauli Away,Bundesliga,4.98,9.40,5,-0.10,away,10,40,-11
-FSV Mainz Home,Bundesliga,6.14,10.22,5,0.00,home,0,50,-8
-FSV Mainz Away,Bundesliga,6.51,6.59,5,0.00,away,0,50,-8
+Mainz Home,Bundesliga,6.14,10.22,5,0.00,home,0,50,-8
+Mainz Away,Bundesliga,6.51,6.59,5,0.00,away,0,50,-8
 Napoli Home,Serie A,6.75,7.10,5,0.11,home,36,45,6
 Napoli Away,Serie A,10.19,7.22,6,0.11,away,36,45,6
 AC Milan Home,Serie A,11.95,6.95,6,0.13,home,45,55,8
@@ -193,8 +193,8 @@ CSKA Moscow Home,RFPL,14.39,7.32,8,0.11,home,33,53,13
 CSKA Moscow Away,RFPL,8.44,10.26,7,0.11,away,33,53,13
 Zenit St. Petersburg Home,RFPL,13.87,4.95,7,0.13,home,40,53,17
 Zenit St. Petersburg Away,RFPL,8.81,7.14,8,0.13,away,40,53,17
-FC Krasnodar Home,RFPL,13.37,7.15,8,0.09,home,53,40,19
-FC Krasnodar Away,RFPL,10.26,4.57,7,0.09,away,53,40,19
+Krasnodar Home,RFPL,13.37,7.15,8,0.09,home,53,40,19
+Krasnodar Away,RFPL,10.26,4.57,7,0.09,away,53,40,19
 Spartak Moscow Home,RFPL,10.73,6.13,8,0.07,home,27,67,3
 Spartak Moscow Away,RFPL,10.68,10.50,7,0.07,away,27,67,3
 Lokomotiv Moscow Home,RFPL,14.35,6.35,7,0.10,home,27,67,12
@@ -209,13 +209,13 @@ Rostov Home,RFPL,8.61,6.68,7,-0.01,home,40,40,-3
 Rostov Away,RFPL,6.74,7.50,8,-0.01,away,40,40,-3
 Dynamo Makhachkala Home,RFPL,9.84,5.87,8,-0.02,home,27,27,-9
 Dynamo Makhachkala Away,RFPL,5.29,7.79,7,-0.02,away,27,27,-9
-FK Akhmat Home,RFPL,8.78,6.08,7,-0.04,home,13,60,-4
-FK Akhmat Away,RFPL,9.43,13.90,8,-0.04,away,13,60,-4
-FC Orenburg Home,RFPL,8.20,9.42,8,-0.10,home,7,67,-9
-FC Orenburg Away,RFPL,8.04,13.23,7,-0.10,away,7,67,-9
+Akhmat Grozny Home,RFPL,8.78,6.08,7,-0.04,home,13,60,-4
+Akhmat Grozny Away,RFPL,9.43,13.90,8,-0.04,away,13,60,-4
+Orenburg Home,RFPL,8.20,9.42,8,-0.10,home,7,67,-9
+Orenburg Away,RFPL,8.04,13.23,7,-0.10,away,7,67,-9
 Nizhny Novgorod Home,RFPL,8.98,9.58,8,-0.06,home,20,27,-16
 Nizhny Novgorod Away,RFPL,3.56,12.30,7,-0.06,away,20,27,-16
-Akron Home,RFPL,8.18,9.35,7,-0.12,home,20,67,-2
-Akron Away,RFPL,8.94,12.46,8,-0.12,away,20,67,-2
-PFC Sochi Home,RFPL,3.34,11.80,7,-0.14,home,7,53,-22
-PFC Sochi Away,RFPL,5.75,13.51,8,-0.14,away,7,53,-22
+Akron Tolyatti Home,RFPL,8.18,9.35,7,-0.12,home,20,67,-2
+Akron Tolyatti Away,RFPL,8.94,12.46,8,-0.12,away,20,67,-2
+Sochi Home,RFPL,3.34,11.80,7,-0.14,home,7,53,-22
+Sochi Away,RFPL,5.75,13.51,8,-0.14,away,7,53,-22
