@@ -1,113 +1,113 @@
-team_key,home_ppg,away_ppg,performance_difference,advantage_strength
-Arsenal Home,2.60,2.17,0.43,moderate
-Manchester City Home,2.50,1.40,1.10,strong
-Chelsea Home,1.67,2.00,-0.33,weak
-Newcastle United Home,1.80,0.50,1.30,strong
-Sunderland Home,2.00,1.40,0.60,moderate
-Tottenham Home,0.83,2.60,-1.77,strong
-Aston Villa Home,2.17,1.00,1.17,strong
-Manchester Utd Home,2.40,1.00,1.40,strong
-Liverpool Home,2.40,1.00,1.40,strong
-Bournemouth Home,2.60,0.83,1.77,strong
-Crystal Palace Home,1.67,1.40,0.27,weak
-Brighton Home,2.20,0.83,1.37,strong
-Brentford Home,2.17,0.60,1.57,strong
-Everton Home,1.83,0.80,1.03,strong
-Fulham Home,2.00,0.17,1.83,strong
-Leeds Utd Home,1.60,0.50,1.10,strong
-Burnley Home,1.40,0.50,0.90,moderate
-West Ham Utd Home,1.00,0.80,0.20,weak
-Nottm Forest Home,1.17,0.40,0.77,moderate
-Wolverhampton Home,0.20,0.17,0.03,weak
-Inter Milan Home,2.50,1.80,0.70,moderate
-AS Roma Home,2.00,2.40,-0.40,weak
-AC Milan Home,2.17,1.80,0.37,moderate
-Napoli Home,2.60,1.50,1.10,strong
-Bologna Home,2.60,1.33,1.27,strong
-Juventus Home,2.00,1.40,0.60,moderate
-Como Home,2.00,1.20,0.80,moderate
-Sassuolo Home,1.20,1.67,-0.47,weak
-Lazio Home,2.00,0.83,1.17,strong
-Udinese Home,1.60,1.17,0.43,moderate
-Cremonese Home,1.20,1.33,-0.13,weak
-Torino Home,1.60,1.00,0.60,moderate
-Atalanta Home,1.17,1.20,-0.03,weak
-Cagliari Home,0.80,1.00,-0.20,weak
-Lecce Home,0.50,1.40,-0.90,moderate
-Pisa Home,1.00,0.60,0.40,moderate
-Parma Home,1.00,0.40,0.60,moderate
-Genoa Home,0.50,0.80,-0.30,weak
-Hellas Verona Home,0.60,0.50,0.10,weak
-Fiorentina Home,0.20,0.67,-0.47,weak
-Real Madrid Home,3.00,2.17,0.83,moderate
-FC Barcelona Home,3.00,1.86,1.14,strong
-Villarreal Home,2.67,1.67,1.00,strong
-Atletico Madrid Home,2.71,1.20,1.51,strong
-Real Betis Home,2.00,1.33,0.67,moderate
-Espanyol Home,1.86,1.00,0.86,moderate
-Athletic Bilbao Home,1.86,0.80,1.06,strong
-Getafe Home,1.60,1.29,0.31,weak
-Sevilla FC Home,1.17,1.50,-0.33,weak
-Alaves Home,1.83,0.67,1.16,strong
-Elche Home,2.00,0.50,1.50,strong
-Rayo Vallecano Home,1.20,1.29,-0.09,weak
-Celta Vigo Home,0.71,1.60,-0.89,moderate
-Real Sociedad Home,1.67,0.50,1.17,strong
-Mallorca Home,1.50,0.50,1.00,strong
-Osasuna Home,2.00,0.14,1.86,strong
-Valencia Home,1.33,0.33,1.00,strong
-Girona Home,1.14,0.40,0.74,moderate
-Levante Home,0.20,1.14,-0.94,moderate
-Real Oviedo Home,0.67,0.67,0.00,weak
-Paris SG Home,2.60,2.00,0.60,moderate
-Marseille Home,2.67,1.50,1.17,strong
-Lens Home,2.50,1.67,0.83,moderate
-Strasbourg Home,2.50,1.17,1.33,strong
-Lille Home,2.17,1.17,1.00,strong
-Monaco Home,1.86,1.40,0.46,moderate
-Lyon Home,2.00,1.33,0.67,moderate
-Rennes Home,1.83,1.17,0.66,moderate
-Nice Home,2.17,0.67,1.50,strong
-Toulouse Home,1.50,1.17,0.33,moderate
-Paris FC Home,1.17,1.17,0.00,weak
-Le Havre Home,1.50,0.83,0.67,moderate
-Angers Home,1.83,0.33,1.50,strong
-Metz Home,1.33,0.50,0.83,moderate
-Brest Home,1.00,0.67,0.33,moderate
-Nantes Home,0.67,1.00,-0.33,weak
-Lorient Home,1.50,0.17,1.33,strong
-Auxerre Home,1.00,0.17,0.83,moderate
-Bayern Munich Home,3.00,2.60,0.40,moderate
-RB Leipzig Home,3.00,1.67,1.33,strong
-Dortmund Home,2.50,1.83,0.67,moderate
-Stuttgart Home,3.00,1.20,1.80,strong
-Leverkusen Home,2.17,1.75,0.42,moderate
-Hoffenheim Home,1.20,2.60,-1.40,strong
-E. Frankfurt Home,1.80,1.60,0.20,weak
-Werder Bremen Home,2.00,1.00,1.00,strong
-FC Koln Home,1.75,1.17,0.58,moderate
-Freiburg Home,1.60,1.00,0.60,moderate
-Union Berlin Home,1.50,0.75,0.75,moderate
-Monchengladbach Home,0.83,1.00,-0.17,weak
-Hamburger SV Home,1.40,0.40,1.00,strong
-Wolfsburg Home,0.40,1.20,-0.80,moderate
-FC Augsburg Home,0.60,0.80,-0.20,weak
-Sankt Pauli Home,0.80,0.60,0.20,weak
-FSV Mainz Home,0.20,0.80,-0.60,moderate
-Heidenheim Home,1.00,0.00,1.00,strong
-FC Krasnodar Home,2.25,2.14,0.11,weak
-CSKA Moscow Home,2.75,1.57,1.18,strong
-Zenit Home,2.71,1.38,1.33,strong
-Lokomotiv M. Home,2.43,1.63,0.80,moderate
-Baltika Home,1.86,1.88,-0.02,weak
-Spartak Moscow Home,2.13,1.14,0.99,moderate
-Rubin Kazan Home,1.75,0.86,0.89,moderate
-Akron Home,0.71,1.63,-0.92,moderate
-Rostov Home,1.29,1.13,0.16,weak
-Dinamo Moscow Home,1.13,1.14,-0.01,weak
-Akhmat Grozny Home,1.43,0.75,0.68,moderate
-Krylya Sovetov Home,1.29,0.63,0.66,moderate
-Makhachkala Home,1.50,0.29,1.21,strong
-Orenburg Home,0.88,0.57,0.31,weak
-Nizhny Novgorod Home,1.00,0.00,1.00,strong
-PFC Sochi Home,0.57,0.50,0.07,weak
+team_base,home_ppg,away_ppg,advantage_strength
+Arsenal,2.60,2.17,moderate
+Manchester City,2.50,1.40,strong
+Chelsea,1.67,2.00,weak
+Newcastle United,1.80,0.50,strong
+Sunderland,2.00,1.40,moderate
+Tottenham,0.83,2.60,strong
+Aston Villa,2.17,1.00,strong
+Manchester United,2.40,1.00,strong
+Liverpool,2.40,1.00,strong
+Bournemouth,2.60,0.83,strong
+Crystal Palace,1.67,1.40,weak
+Brighton,2.20,0.83,strong
+Brentford,2.17,0.60,strong
+Everton,1.83,0.80,strong
+Fulham,2.00,0.17,strong
+Leeds United,1.60,0.50,strong
+Burnley,1.40,0.50,moderate
+West Ham,1.00,0.80,weak
+Nottingham Forest,1.17,0.40,moderate
+Wolverhampton Wanderers,0.20,0.17,weak
+Inter,2.50,1.80,moderate
+AS Roma,2.00,2.40,weak
+AC Milan,2.17,1.80,moderate
+Napoli,2.60,1.50,strong
+Bologna,2.60,1.33,strong
+Juventus,2.00,1.40,moderate
+Como,2.00,1.20,moderate
+Sassuolo,1.20,1.67,weak
+Lazio,2.00,0.83,strong
+Udinese,1.60,1.17,moderate
+Cremonese,1.20,1.33,weak
+Torino,1.60,1.00,moderate
+Atalanta,1.17,1.20,weak
+Cagliari,0.80,1.00,weak
+Lecce,0.50,1.40,moderate
+Pisa,1.00,0.60,moderate
+Parma,1.00,0.40,moderate
+Genoa,0.50,0.80,weak
+Hellas Verona,0.60,0.50,weak
+Fiorentina,0.20,0.67,weak
+Real Madrid,3.00,2.17,moderate
+FC Barcelona,3.00,1.86,strong
+Villarreal,2.67,1.67,strong
+Atletico Madrid,2.71,1.20,strong
+Real Betis,2.00,1.33,moderate
+Espanyol,1.86,1.00,moderate
+Athletic Bilbao,1.86,0.80,strong
+Getafe,1.60,1.29,weak
+Sevilla,1.17,1.50,weak
+Alaves,1.83,0.67,strong
+Elche,2.00,0.50,strong
+Rayo Vallecano,1.20,1.29,weak
+Celta Vigo,0.71,1.60,moderate
+Real Sociedad,1.67,0.50,strong
+Mallorca,1.50,0.50,strong
+Osasuna,2.00,0.14,strong
+Valencia,1.33,0.33,strong
+Girona,1.14,0.40,moderate
+Levante,0.20,1.14,moderate
+Real Oviedo,0.67,0.67,weak
+Paris Saint Germain,2.60,2.00,moderate
+Marseille,2.67,1.50,strong
+Lens,2.50,1.67,moderate
+Strasbourg,2.50,1.17,strong
+Lille,2.17,1.17,strong
+Monaco,1.86,1.40,moderate
+Lyon,2.00,1.33,moderate
+Rennes,1.83,1.17,moderate
+Nice,2.17,0.67,strong
+Toulouse,1.50,1.17,moderate
+Paris FC,1.17,1.17,weak
+Le Havre,1.50,0.83,moderate
+Angers,1.83,0.33,strong
+Metz,1.33,0.50,moderate
+Brest,1.00,0.67,moderate
+Nantes,0.67,1.00,weak
+Lorient,1.50,0.17,strong
+Auxerre,1.00,0.17,moderate
+Bayern Munich,3.00,2.60,moderate
+RB Leipzig,3.00,1.67,strong
+Borussia Dortmund,2.50,1.83,moderate
+VfB Stuttgart,3.00,1.20,strong
+Bayer Leverkusen,2.17,1.75,moderate
+Hoffenheim,1.20,2.60,strong
+Eintracht Frankfurt,1.80,1.60,weak
+Werder Bremen,2.00,1.00,strong
+FC Cologne,1.75,1.17,moderate
+Freiburg,1.60,1.00,moderate
+Union Berlin,1.50,0.75,moderate
+Borussia Monchengladbach,0.83,1.00,weak
+Hamburger SV,1.40,0.40,strong
+Wolfsburg,0.40,1.20,moderate
+FC Augsburg,0.60,0.80,weak
+Sankt Pauli,0.80,0.60,weak
+Mainz,0.20,0.80,moderate
+FC Heidenheim,1.00,0.00,strong
+Krasnodar,2.25,2.14,weak
+CSKA Moscow,2.75,1.57,strong
+Zenit St. Petersburg,2.71,1.38,strong
+Lokomotiv Moscow,2.43,1.63,moderate
+Baltika,1.86,1.88,weak
+Spartak Moscow,2.13,1.14,moderate
+Rubin Kazan,1.75,0.86,moderate
+Akron Tolyatti,0.71,1.63,moderate
+Rostov,1.29,1.13,weak
+Dinamo Moscow,1.13,1.14,weak
+Akhmat Grozny,1.43,0.75,moderate
+Krylya Sovetov,1.29,0.63,moderate
+Dynamo Makhachkala,1.50,0.29,strong
+Orenburg,0.88,0.57,weak
+Nizhny Novgorod,1.00,0.00,strong
+Sochi,0.57,0.50,weak
