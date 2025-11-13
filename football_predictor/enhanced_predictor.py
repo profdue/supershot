@@ -3,9 +3,70 @@ from typing import Tuple, Dict, Any
 import numpy as np
 from scipy.stats import poisson
 
+class WeightConfig:
+    def __init__(self):
+        self.base_weights = {
+            'performance': 0.55,  # Poisson/xG based
+            'quality': 0.45       # Elo based
+        }
+        self.league_weights = {
+            "Premier League": {'performance': 0.60, 'quality': 0.40},
+            "Serie A": {'performance': 0.52, 'quality': 0.48},
+            "La Liga": {'performance': 0.56, 'quality': 0.44},
+            "Bundesliga": {'performance': 0.62, 'quality': 0.38},
+            "Ligue 1": {'performance': 0.54, 'quality': 0.46},
+            "RFPL": {'performance': 0.50, 'quality': 0.50}
+        }
+    
+    def get_weights(self, league, home_matches, away_matches, home_injuries, away_injuries):
+        """Get dynamic weights based on context"""
+        # Start with league-specific or base weights
+        weights = self.league_weights.get(league, self.base_weights.copy())
+        
+        # Small sample protection
+        min_matches = min(home_matches, away_matches)
+        if min_matches < 6:
+            weights = self._adjust_for_sample_size(weights, min_matches)
+            
+        # Injury disparity adjustment
+        if self._has_significant_injury_gap(home_injuries, away_injuries):
+            weights = self._adjust_for_injuries(weights)
+            
+        return self._normalize_weights(weights)
+    
+    def _adjust_for_sample_size(self, weights, min_matches):
+        """More weight to quality when sample is small"""
+        adjustment = (6 - min_matches) * 0.05  # 5% per missing match
+        return {
+            'performance': max(0.40, weights['performance'] - adjustment),
+            'quality': min(0.60, weights['quality'] + adjustment)
+        }
+    
+    def _has_significant_injury_gap(self, home_injuries, away_injuries):
+        """Check if injury difference is significant (2+ levels)"""
+        injury_levels = {"None": 0, "Minor": 1, "Moderate": 2, "Significant": 3, "Crisis": 4}
+        gap = abs(injury_levels[home_injuries] - injury_levels[away_injuries])
+        return gap >= 2
+    
+    def _adjust_for_injuries(self, weights):
+        """Adjust weights when injury gap is significant"""
+        return {
+            'performance': weights['performance'] - 0.05,
+            'quality': weights['quality'] + 0.05
+        }
+    
+    def _normalize_weights(self, weights):
+        """Ensure weights sum to 1.0"""
+        total = weights['performance'] + weights['quality']
+        return {
+            'performance': weights['performance'] / total,
+            'quality': weights['quality'] / total
+        }
+
 class EnhancedPredictor:
     def __init__(self, data_integrator):
         self.data_integrator = data_integrator
+        self.weight_config = WeightConfig()
 
     def _get_correct_team_data(self, team_key: str, is_home: bool) -> dict:
         base_name = self.data_integrator._extract_base_name(team_key)
@@ -24,6 +85,15 @@ class EnhancedPredictor:
         home_data = self._get_correct_team_data(home_team, is_home=True)
         away_data = self._get_correct_team_data(away_team, is_home=False)
         league = home_data.get("league", "Premier League")
+
+        # Get dynamic weights based on context
+        weights = self.weight_config.get_weights(
+            league,
+            home_data['matches_played'],
+            away_data['matches_played'], 
+            home_injuries,
+            away_injuries
+        )
 
         # PURE xG-based goal counting (NO DOUBLE HOME ADVANTAGE)
         home_goal_exp, away_goal_exp = self._calculate_pure_xg_goal_expectancy(
@@ -45,13 +115,10 @@ class EnhancedPredictor:
         # ELO probabilities  
         elo_home_win, elo_draw, elo_away_win = self._calculate_elo_probabilities(home_data, away_data)
 
-        # Calibrated blend (reduced Poisson dominance)
-        poisson_weight = 0.55  # Reduced from 0.60
-        elo_weight = 0.45      # Increased from 0.40
-
-        home_prob = poisson_weight * poisson_home_win + elo_weight * elo_home_win
-        draw_prob = poisson_weight * poisson_draw + elo_weight * elo_draw
-        away_prob = poisson_weight * poisson_away_win + elo_weight * elo_away_win
+        # Apply dynamic weights
+        home_prob = weights['performance'] * poisson_home_win + weights['quality'] * elo_home_win
+        draw_prob = weights['performance'] * poisson_draw + weights['quality'] * elo_draw
+        away_prob = weights['performance'] * poisson_away_win + weights['quality'] * elo_away_win
 
         # Normalize
         home_prob, draw_prob, away_prob = self._normalize_triple(home_prob, draw_prob, away_prob)
@@ -62,12 +129,13 @@ class EnhancedPredictor:
             "away_win": round(away_prob, 4),
             "expected_goals": {"home": round(home_goal_exp, 3), "away": round(away_goal_exp, 3)},
             "key_factors": {
-                "poisson_weight": round(poisson_weight, 3),
-                "elo_weight": round(elo_weight, 3),
+                "performance_weight": round(weights['performance'], 3),
+                "quality_weight": round(weights['quality'], 3),
                 "elo_diff": home_data["base_quality"]["elo"] - away_data["base_quality"]["elo"],
                 "injury_home": home_injuries,
                 "injury_away": away_injuries,
                 "league": league,
+                "sample_size_note": f"min_matches: {min(home_data['matches_played'], away_data['matches_played'])}"
             },
         }
 
@@ -78,7 +146,7 @@ class EnhancedPredictor:
         away_data = self._get_correct_team_data(away_team, is_home=False)
         league = home_data.get("league", "Premier League")
 
-        # Pure xG-based goals
+        # Pure xG-based goals (NO DOUBLE HOME ADVANTAGE)
         home_goal_exp, away_goal_exp = self._calculate_pure_xg_goal_expectancy(
             home_team, away_team, home_xg, away_xg, home_xga, away_xga
         )
@@ -265,13 +333,13 @@ class EnhancedPredictor:
         return self._normalize_triple(home_win, draw, away_win)
 
     def _calculate_injury_adjustment(self, home_injuries: str, away_injuries: str) -> Dict[str, float]:
-        # MORE CONSERVATIVE injury impacts
+        # CONSERVATIVE injury impacts (6-12% vs 10-28%)
         injury_weights = {
             "None": {"attack_mult": 1.00, "defense_mult": 1.00},
             "Minor": {"attack_mult": 0.97, "defense_mult": 0.96},
-            "Moderate": {"attack_mult": 0.93, "defense_mult": 0.90},  # Reduced from 0.90/0.87
-            "Significant": {"attack_mult": 0.88, "defense_mult": 0.85},  # Reduced from 0.85/0.82
-            "Crisis": {"attack_mult": 0.80, "defense_mult": 0.78},  # Reduced from 0.75/0.72
+            "Moderate": {"attack_mult": 0.94, "defense_mult": 0.92},  # 6-8% impact
+            "Significant": {"attack_mult": 0.90, "defense_mult": 0.88},  # 10-12% impact
+            "Crisis": {"attack_mult": 0.85, "defense_mult": 0.82},  # 15-18% impact
         }
         home_adj = injury_weights.get(home_injuries, injury_weights["None"])
         away_adj = injury_weights.get(away_injuries, injury_weights["None"])
