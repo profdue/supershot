@@ -576,7 +576,7 @@ class ProfessionalPredictionEngine:
         if self.enhanced_predictor:
             print("🎯 Using Enhanced Predictor with PER-MATCH values")
             
-            # 🚨 CRITICAL FIX: Convert to per-match values before passing to enhanced predictor
+            # Convert to per-match values before passing to enhanced predictor
             home_xg_per_match = home_data['xg_per_match']
             home_xga_per_match = home_data['xga_per_match']
             away_xg_per_match = away_data['xg_per_match']
@@ -597,18 +597,18 @@ class ProfessionalPredictionEngine:
             
             winner_prediction = self.enhanced_predictor.predict_winner_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,  # ← PER MATCH values
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj,
                 inputs['home_injuries'], inputs['away_injuries']
             )
             
             over_under_prediction = self.enhanced_predictor.predict_over_under_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj   # ← PER MATCH values
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
             )
             
             btts_prediction = self.enhanced_predictor.predict_btts_enhanced(
                 inputs['home_team'], inputs['away_team'],
-                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj   # ← PER MATCH values
+                home_xg_adj, away_xg_adj, home_xga_adj, away_xga_adj
             )
         else:
             print("🎯 Using Basic Predictor (Enhanced not available)")
@@ -658,17 +658,15 @@ class ProfessionalPredictionEngine:
         # Generate insights
         insights = self.generate_enhanced_insights(inputs, probabilities, inputs['home_team'], inputs['away_team'])
         
-        # 🚨 FIXED: Simplified reliability calculation without confidence fields
+        # Reliability calculation
         if self.enhanced_predictor:
-            # For enhanced predictor, use a fixed high reliability since we trust the model
             reliability_score = 75
         else:
-            reliability_score = 60  # Basic mode default
+            reliability_score = 60
 
         reliability_level = 'High' if reliability_score > 70 else 'Moderate' if reliability_score > 55 else 'Low'
         reliability_advice = f'Enhanced predictions provide {reliability_level.lower()} reliability'
         
-        # 🚨 FIXED: Remove confidence references from calculation details
         calculation_details = {
             'enhanced_predictions_used': self.enhanced_predictor is not None,
             'key_factors_winner': winner_prediction.get('key_factors', {}),
@@ -678,7 +676,7 @@ class ProfessionalPredictionEngine:
             'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
         
-        # 🚨 CRITICAL FIX: Only include the three over/under markets we now support
+        # 🚨 CRITICAL FIX: Only include the markets we now support
         combined_probabilities = {
             **probabilities,
             'over_1.5': over_under_prediction['over_1.5'],
@@ -702,7 +700,6 @@ class ProfessionalPredictionEngine:
                 'away': away_data
             },
             'calculation_details': calculation_details,
-            # Simplified reliability information
             'reliability_score': reliability_score,
             'reliability_level': reliability_level,
             'reliability_advice': reliability_advice
