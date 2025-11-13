@@ -602,7 +602,7 @@ def display_enhanced_predictions(engine, result, inputs):
     
     over_under_probs = result['enhanced_predictions']['over_under']
     
-    col1, col2 = st.columns(2)  # Changed from 3 to 2 columns
+    col1, col2, col3 = st.columns(3)  # THREE COLUMNS FOR ALL THREE MARKETS
     
     with col1:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -622,6 +622,17 @@ def display_enhanced_predictions(engine, result, inputs):
             st.write("**📈 LIKELY**")
         elif over_25 < 0.45:
             st.write("**📉 UNLIKELY**")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        under_25 = over_under_probs['under_2.5']
+        color_under = "🟢" if under_25 > 0.60 else "🟡" if under_25 > 0.50 else "🔴"
+        st.metric(f"{color_under} Under 2.5 Goals", f"{under_25:.1%}")
+        if under_25 > 0.55:
+            st.write("**📉 LIKELY**")
+        elif under_25 < 0.45:
+            st.write("**📈 UNLIKELY**")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # BTTS Prediction WITHOUT confidence
