@@ -248,14 +248,6 @@ class ProfessionalPredictionEngine:
             if not self.data or any(v is None for v in self.data.values()):
                 raise Exception("Failed to load required data files")
                 
-            # 🚨 DEBUG: Check what we actually loaded
-            print("🔍 LOADED DATA FILES:")
-            for key, df in self.data.items():
-                if df is not None:
-                    print(f"  {key}: {len(df)} rows, columns: {list(df.columns)}")
-                else:
-                    print(f"  {key}: None")
-            
             # Initialize data integrator FIRST
             self.data_integrator = DataIntegrator(self)
             self.data_integrator.integrate_all_data()
@@ -635,10 +627,7 @@ class ProfessionalPredictionEngine:
             over_under_prediction = {
                 'over_1.5': 1 - poisson.cdf(1.5, total_goals),
                 'over_2.5': 1 - poisson.cdf(2.5, total_goals),
-                'over_3.5': 1 - poisson.cdf(3.5, total_goals),
-                'under_1.5': poisson.cdf(1.5, total_goals),
                 'under_2.5': poisson.cdf(2.5, total_goals),
-                'under_3.5': poisson.cdf(3.5, total_goals),
                 'key_factors': {'basic_mode': True}
             }
             
@@ -689,14 +678,11 @@ class ProfessionalPredictionEngine:
             'team_data_context': f"Home: {home_data.get('location', 'unknown')}, Away: {away_data.get('location', 'unknown')}"
         }
         
-        # Combine all probabilities
+        # 🚨 CRITICAL FIX: Only include the three over/under markets we now support
         combined_probabilities = {
             **probabilities,
             'over_1.5': over_under_prediction['over_1.5'],
-            'over_3.5': over_under_prediction['over_3.5'],
-            'under_1.5': over_under_prediction['under_1.5'],
             'under_2.5': over_under_prediction['under_2.5'],
-            'under_3.5': over_under_prediction['under_3.5'],
             'btts_yes': btts_prediction['btts_yes'],
             'btts_no': btts_prediction['btts_no']
         }
