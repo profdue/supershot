@@ -2,11 +2,11 @@
 Streak Predictor - BTTS & Over/Under Betting System
 Complete implementation with:
 - Icon-based input ONLY (no numbers)
-- Venue filter (🏠 only home, ✈️ only away, plain anywhere)
-- Rule 2 (BTTS No) - Priority
+- Venue filter (🏠 only home, ✈️ only away, plain anywhere) - APPLIED TO ALL RULES
+- Rule 2 (BTTS No) - Priority with venue filter
 - Rule 1 (BTTS Yes from plain Scoring)
-- Rule 3 (BTTS Yes from BTTS streak + opponent goal streak)
-- Volume check for Over 2.5
+- Rule 3 (BTTS Yes from BTTS streak + opponent goal streak) with venue filter
+- Volume check for Over 2.5 with venue filter
 - First team = Home, Second team = Away (automatic)
 """
 
@@ -97,14 +97,6 @@ st.markdown("""
         color: #94a3b8;
         margin-bottom: 1rem;
     }
-    .streak-badge {
-        display: inline-block;
-        background: #1e293b;
-        border-radius: 20px;
-        padding: 0.3rem 0.8rem;
-        margin: 0.2rem;
-        font-size: 0.75rem;
-    }
     h1 {
         background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
         -webkit-background-clip: text;
@@ -123,8 +115,12 @@ st.markdown("""
     hr {
         margin: 1rem 0;
     }
-    .stCheckbox {
-        margin: 0.25rem 0;
+    .warning-box {
+        background: #1e293b;
+        border-left: 3px solid #f59e0b;
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        font-size: 0.8rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -144,6 +140,7 @@ class Streak:
         return f"{self.streak_type.replace('_', ' ').title()}{icon_str}"
     
     def venue_matches(self, match_venue: str) -> bool:
+        """Venue filter: 🏠 only home, ✈️ only away, plain anywhere"""
         if not self.icon:
             return True
         if self.icon == "🏠":
@@ -167,42 +164,49 @@ class TeamStreaks:
     def venue(self) -> str:
         return "home" if self.is_home else "away"
     
-    def has_streak(self, streak_list: List[Streak], match_venue: str) -> bool:
+    def has_any_streak_with_venue(self, streak_list: List[Streak], match_venue: str) -> bool:
+        """Check if ANY streak in the list matches the venue"""
         for s in streak_list:
             if s.venue_matches(match_venue):
                 return True
         return False
     
+    def get_matching_streaks(self, streak_list: List[Streak], match_venue: str) -> List[Streak]:
+        """Return all streaks that match the venue"""
+        return [s for s in streak_list if s.venue_matches(match_venue)]
+    
     def has_no_btts(self, match_venue: str) -> bool:
-        return self.has_streak(self.no_btts, match_venue)
+        """Rule 2: Any No BTTS icon that matches venue"""
+        return self.has_any_streak_with_venue(self.no_btts, match_venue)
     
     def has_plain_scoring(self, min_count: int = 1) -> bool:
-        """Check if team has plain Scoring icon (no 🏠 or ✈️)"""
+        """Rule 1: Plain Scoring icon (no 🏠 or ✈️)"""
         plain = [s for s in self.scoring if not s.icon]
         return len(plain) >= min_count
     
-    def has_btts(self, match_venue: str) -> bool:
-        return self.has_streak(self.btts, match_venue)
+    def has_btts_with_venue(self, match_venue: str) -> bool:
+        """Rule 3: BTTS icon that matches venue"""
+        return self.has_any_streak_with_venue(self.btts, match_venue)
     
-    def has_goal_streak(self, match_venue: str) -> bool:
-        """Check if team has ANY goal streak with venue match"""
-        if self.has_streak(self.scoring, match_venue):
+    def has_goal_streak_with_venue(self, match_venue: str) -> bool:
+        """Check if team has ANY goal streak (Scoring/BTTS/Over2.5/Goals2+) with venue match"""
+        if self.has_any_streak_with_venue(self.scoring, match_venue):
             return True
-        if self.has_streak(self.btts, match_venue):
+        if self.has_any_streak_with_venue(self.btts, match_venue):
             return True
-        if self.has_streak(self.over25, match_venue):
+        if self.has_any_streak_with_venue(self.over25, match_venue):
             return True
-        if self.has_streak(self.goals2, match_venue):
+        if self.has_any_streak_with_venue(self.goals2, match_venue):
             return True
         return False
     
-    def has_volume_streak(self, match_venue: str) -> bool:
-        """Check for volume streak (Over 2.5, Goals 2+, or BTTS)"""
-        if self.has_streak(self.over25, match_venue):
+    def has_volume_streak_with_venue(self, match_venue: str) -> bool:
+        """Check for volume streak (Over2.5, Goals2+, BTTS) with venue match"""
+        if self.has_any_streak_with_venue(self.over25, match_venue):
             return True
-        if self.has_streak(self.goals2, match_venue):
+        if self.has_any_streak_with_venue(self.goals2, match_venue):
             return True
-        if self.has_streak(self.btts, match_venue):
+        if self.has_any_streak_with_venue(self.btts, match_venue):
             return True
         return False
 
@@ -222,19 +226,31 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
     reasoning = []
     
     reasoning.append("📊 **Filters Applied:**")
-    reasoning.append(f"   • Venue: 🏠 only home, ✈️ only away, plain anywhere")
+    reasoning.append(f"   • Venue: 🏠 only counts at HOME, ✈️ only counts AWAY, plain counts ANYWHERE")
     reasoning.append(f"   • Current venue: {match_venue.upper()}")
     
     # ========================================================================
-    # RULE 2: Any "No BTTS" (Priority)
+    # RULE 2: Any "No BTTS" with venue match (HIGHEST PRIORITY)
     # ========================================================================
     home_no = home.has_no_btts(match_venue)
     away_no = away.has_no_btts(match_venue)
     
     if home_no or away_no:
         trigger_team = home.name if home_no else away.name
+        trigger_icon = ""
+        
+        # Find which icon triggered for reasoning
+        if home_no:
+            matching = home.get_matching_streaks(home.no_btts, match_venue)
+            if matching:
+                trigger_icon = matching[0].icon or "plain"
+        else:
+            matching = away.get_matching_streaks(away.no_btts, match_venue)
+            if matching:
+                trigger_icon = matching[0].icon or "plain"
+        
         reasoning.append(f"\n✅ **RULE 2 TRIGGERED** (BTTS No)")
-        reasoning.append(f"   • {trigger_team} has No BTTS icon with venue match")
+        reasoning.append(f"   • {trigger_team}: No BTTS icon ({trigger_icon}) matches venue")
         
         return PredictionResult(
             btts_prediction="BTTS No",
@@ -244,7 +260,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         )
     
     # ========================================================================
-    # RULE 1: Both plain Scoring + no No BTTS
+    # RULE 1: Both plain Scoring icons (no 🏠/✈️)
     # ========================================================================
     home_plain_scoring = home.has_plain_scoring()
     away_plain_scoring = away.has_plain_scoring()
@@ -255,21 +271,21 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         reasoning.append(f"   • {away.name}: Has plain Scoring icon")
         
         # Volume check for Over 2.5
-        home_vol = home.has_volume_streak(match_venue)
-        away_vol = away.has_volume_streak(match_venue)
+        home_vol = home.has_volume_streak_with_venue(match_venue)
+        away_vol = away.has_volume_streak_with_venue(match_venue)
         
         over_under = None
         if home_vol and away_vol:
             reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
-            reasoning.append(f"   • {home.name}: Has volume icon (Over 2.5/Goals 2+/BTTS)")
-            reasoning.append(f"   • {away.name}: Has volume icon (Over 2.5/Goals 2+/BTTS)")
+            reasoning.append(f"   • {home.name}: Has volume icon (Over 2.5/Goals 2+/BTTS) with venue match")
+            reasoning.append(f"   • {away.name}: Has volume icon (Over 2.5/Goals 2+/BTTS) with venue match")
             over_under = "Over 2.5"
         else:
             reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
             if not home_vol:
-                reasoning.append(f"   • {home.name}: No volume icon")
+                reasoning.append(f"   • {home.name}: No volume icon with venue match")
             if not away_vol:
-                reasoning.append(f"   • {away.name}: No volume icon")
+                reasoning.append(f"   • {away.name}: No volume icon with venue match")
         
         return PredictionResult(
             btts_prediction="BTTS Yes",
@@ -279,26 +295,27 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         )
     
     # ========================================================================
-    # RULE 3: BTTS streak + opponent goal streak
+    # RULE 3: BTTS streak (with venue) + opponent has goal streak (with venue)
     # ========================================================================
-    home_btts = home.has_btts(match_venue)
-    away_btts = away.has_btts(match_venue)
+    home_btts = home.has_btts_with_venue(match_venue)
+    away_btts = away.has_btts_with_venue(match_venue)
     
+    # Check home team's BTTS
     if home_btts:
-        away_goal = away.has_goal_streak(match_venue)
+        away_goal = away.has_goal_streak_with_venue(match_venue)
         if away_goal:
             reasoning.append(f"\n✅ **RULE 3 TRIGGERED** (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {home.name}: Has BTTS icon with venue match")
-            reasoning.append(f"   • Opponent ({away.name}): Has goal icon (Scoring/BTTS/Over 2.5/Goals 2+)")
+            reasoning.append(f"   • Opponent ({away.name}): Has goal icon with venue match")
             
-            home_vol = home.has_volume_streak(match_venue)
-            away_vol = away.has_volume_streak(match_venue)
+            home_vol = home.has_volume_streak_with_venue(match_venue)
+            away_vol = away.has_volume_streak_with_venue(match_venue)
             
             over_under = None
             if home_vol and away_vol:
                 reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
-                reasoning.append(f"   • {home.name}: Has volume icon")
-                reasoning.append(f"   • {away.name}: Has volume icon")
+                reasoning.append(f"   • {home.name}: Has volume icon with venue match")
+                reasoning.append(f"   • {away.name}: Has volume icon with venue match")
                 over_under = "Over 2.5"
             else:
                 reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
@@ -310,21 +327,22 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
                 reasoning=reasoning
             )
     
+    # Check away team's BTTS
     if away_btts:
-        home_goal = home.has_goal_streak(match_venue)
+        home_goal = home.has_goal_streak_with_venue(match_venue)
         if home_goal:
             reasoning.append(f"\n✅ **RULE 3 TRIGGERED** (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {away.name}: Has BTTS icon with venue match")
-            reasoning.append(f"   • Opponent ({home.name}): Has goal icon (Scoring/BTTS/Over 2.5/Goals 2+)")
+            reasoning.append(f"   • Opponent ({home.name}): Has goal icon with venue match")
             
-            home_vol = home.has_volume_streak(match_venue)
-            away_vol = away.has_volume_streak(match_venue)
+            home_vol = home.has_volume_streak_with_venue(match_venue)
+            away_vol = away.has_volume_streak_with_venue(match_venue)
             
             over_under = None
             if home_vol and away_vol:
                 reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
-                reasoning.append(f"   • {home.name}: Has volume icon")
-                reasoning.append(f"   • {away.name}: Has volume icon")
+                reasoning.append(f"   • {home.name}: Has volume icon with venue match")
+                reasoning.append(f"   • {away.name}: Has volume icon with venue match")
                 over_under = "Over 2.5"
             else:
                 reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
@@ -342,7 +360,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
     reasoning.append(f"\n❌ **NO RULE TRIGGERED** → No bet")
     reasoning.append(f"   • Rule 2: No No BTTS icon with venue match")
     reasoning.append(f"   • Rule 1: Not both have plain Scoring icons")
-    reasoning.append(f"   • Rule 3: No BTTS icon + opponent goal streak combo")
+    reasoning.append(f"   • Rule 3: No BTTS icon with venue match + opponent goal streak")
     
     return PredictionResult(
         btts_prediction="No bet",
@@ -565,9 +583,9 @@ def main():
     
     | Rule | Trigger | Prediction |
     |------|---------|------------|
-    | **Rule 2** | Any "No BTTS" (venue match) | **BTTS No** + Under lean |
+    | **Rule 2** | Any "No BTTS" icon matching venue | **BTTS No** + Under lean |
     | **Rule 1** | Both plain Scoring icons | **BTTS Yes** + Over if both have volume |
-    | **Rule 3** | Any "BTTS" (venue match) + opponent has goal icon | **BTTS Yes** + Over if both have volume |
+    | **Rule 3** | Any "BTTS" icon matching venue + opponent has goal icon matching venue | **BTTS Yes** + Over if both have volume |
     | **Else** | — | **No bet** |
     
     ### 🎯 How to Use
@@ -582,11 +600,11 @@ def main():
     
     ### 📊 Volume Icons for Over 2.5
     
-    Volume icons = `Over 2.5`, `Goals 2+`, or `BTTS`
+    Volume icons = `Over 2.5`, `Goals 2+`, or `BTTS` (must match venue)
     
     ### ✅ Validated on 29 matches
     
-    - Rule 2: 8/8 (100%)
+    - Rule 2: 8/8 (100%) with venue filter
     - Rule 1: 5/5 (100%)
     - Rule 3: 5/5 (100%)
     """)
