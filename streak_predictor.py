@@ -8,11 +8,12 @@ Complete implementation with:
 - Rule 3 (BTTS Yes from BTTS streak) + opponent goal streak
 - Volume check includes BTTS for Over 2.5
 - First team = Home, Second team = Away (automatic)
+- DEBUG OUTPUT to trace all decisions
 """
 
 import streamlit as st
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 
 # ============================================================================
 # PAGE CONFIG
@@ -112,6 +113,15 @@ st.markdown("""
         border: none;
         width: 100%;
     }
+    .debug-box {
+        background: #0f172a;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+        border: 1px solid #334155;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -141,7 +151,6 @@ class Streak:
         if self.icon == "✈️":
             return match_venue == "away"
         return False
-
 
 @dataclass
 class TeamStreaks:
@@ -181,6 +190,8 @@ class TeamStreaks:
         return False, None
     
     def has_goal_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
+        """Check if team has ANY goal streak (plain or icon-specific with venue match)"""
+        
         # FIRST: Check plain streaks (no icon) - these always count regardless of venue
         plain_scoring = [s for s in self.scoring if not s.icon]
         if plain_scoring:
@@ -240,31 +251,70 @@ class TeamStreaks:
             return True, btts
         return False, None
 
-
 @dataclass
 class PredictionResult:
     btts_prediction: str
     over_under: Optional[str]
     triggered_rule: str
     reasoning: List[str]
-
+    debug: List[str] = field(default_factory=list)
 
 # ============================================================================
 # PREDICTION LOGIC
 # ============================================================================
 def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> PredictionResult:
     reasoning = []
+    debug = []
     
     reasoning.append("📊 Filters Applied:")
     reasoning.append("   • Regression: Only streaks ≤ 10 are reliable")
     reasoning.append(f"   • Venue: 🏠 only home, ✈️ only away, plain anywhere")
     reasoning.append(f"   • Current venue: {match_venue.upper()}")
     
+    debug.append(f"\n{'='*50}")
+    debug.append(f"DEBUG: Starting prediction for {home.name} (HOME) vs {away.name} (AWAY)")
+    debug.append(f"DEBUG: match_venue = {match_venue}")
+    debug.append(f"{'='*50}")
+    
+    # Debug: Print all streaks for home team
+    debug.append(f"\n--- {home.name} (HOME) Streaks ---")
+    for s in home.scoring:
+        debug.append(f"  Scoring: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in home.no_btts:
+        debug.append(f"  No BTTS: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in home.btts:
+        debug.append(f"  BTTS: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in home.over25:
+        debug.append(f"  Over 2.5: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in home.goals2:
+        debug.append(f"  Goals 2+: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    
+    # Debug: Print all streaks for away team
+    debug.append(f"\n--- {away.name} (AWAY) Streaks ---")
+    for s in away.scoring:
+        debug.append(f"  Scoring: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in away.no_btts:
+        debug.append(f"  No BTTS: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in away.btts:
+        debug.append(f"  BTTS: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in away.over25:
+        debug.append(f"  Over 2.5: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    for s in away.goals2:
+        debug.append(f"  Goals 2+: {s.display} | reliable={s.is_reliable}, venue_match={s.venue_matches(match_venue)}")
+    
     # ========================================================================
     # RULE 2: Any "No BTTS" (Priority)
     # ========================================================================
+    debug.append(f"\n--- RULE 2 CHECK (Any No BTTS) ---")
     home_no, home_no_streak = home.has_reliable_no_btts(match_venue)
     away_no, away_no_streak = away.has_reliable_no_btts(match_venue)
+    
+    debug.append(f"  {home.name} has_reliable_no_btts: {home_no}")
+    if home_no_streak:
+        debug.append(f"    → {home_no_streak.display}")
+    debug.append(f"  {away.name} has_reliable_no_btts: {away_no}")
+    if away_no_streak:
+        debug.append(f"    → {away_no_streak.display}")
     
     if home_no or away_no:
         no_teams = []
@@ -276,116 +326,198 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         
         reasoning.append(f"\n✅ RULE 2 TRIGGERED (BTTS No)")
         reasoning.append(f"   • {longest_team}: {longest_streak.display}")
+        debug.append(f"\n✅ RULE 2 TRIGGERED → BTTS No")
+        
         return PredictionResult(
             btts_prediction="BTTS No",
             over_under="Under 2.5 lean",
             triggered_rule="Rule 2 (BTTS No)",
-            reasoning=reasoning
+            reasoning=reasoning,
+            debug=debug
         )
+    
+    debug.append(f"  → No reliable No BTTS streaks found")
     
     # ========================================================================
     # RULE 1: Both plain Scoring ≥3 + reliable + no No BTTS
     # ========================================================================
+    debug.append(f"\n--- RULE 1 CHECK (Both Plain Scoring ≥3) ---")
     home_scoring, home_sc_streak = home.has_reliable_scoring_plain(min_length=3)
     away_scoring, away_sc_streak = away.has_reliable_scoring_plain(min_length=3)
+    
+    debug.append(f"  {home.name} has_reliable_scoring_plain(≥3): {home_scoring}")
+    if home_sc_streak:
+        debug.append(f"    → {home_sc_streak.display}")
+    debug.append(f"  {away.name} has_reliable_scoring_plain(≥3): {away_scoring}")
+    if away_sc_streak:
+        debug.append(f"    → {away_sc_streak.display}")
     
     # Check for No BTTS streaks (must be absent)
     home_has_no, _ = home.has_reliable_no_btts(match_venue)
     away_has_no, _ = away.has_reliable_no_btts(match_venue)
     
+    debug.append(f"  {home.name} has No BTTS (must be absent): {home_has_no}")
+    debug.append(f"  {away.name} has No BTTS (must be absent): {away_has_no}")
+    
     if home_scoring and away_scoring and not home_has_no and not away_has_no:
         reasoning.append(f"\n✅ RULE 1 TRIGGERED (BTTS Yes from Plain Scoring)")
         reasoning.append(f"   • {home.name}: {home_sc_streak.display}")
         reasoning.append(f"   • {away.name}: {away_sc_streak.display}")
+        debug.append(f"\n✅ RULE 1 TRIGGERED → BTTS Yes")
         
         # Volume check for Over 2.5
         home_vol, home_vol_streak = home.has_volume_streak(match_venue)
         away_vol, away_vol_streak = away.has_volume_streak(match_venue)
         
+        debug.append(f"\n--- VOLUME CHECK (Over 2.5) ---")
+        debug.append(f"  {home.name} has_volume_streak: {home_vol}")
+        if home_vol_streak:
+            debug.append(f"    → {home_vol_streak.display}")
+        debug.append(f"  {away.name} has_volume_streak: {away_vol}")
+        if away_vol_streak:
+            debug.append(f"    → {away_vol_streak.display}")
+        
         over_under = None
         if home_vol and away_vol:
             reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
             over_under = "Over 2.5"
+            debug.append(f"  → Both have volume → Over 2.5")
         else:
             reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
+            debug.append(f"  → Not both have volume → No Over bet")
         
         return PredictionResult(
             btts_prediction="BTTS Yes",
             over_under=over_under,
             triggered_rule="Rule 1 (Plain Scoring)",
-            reasoning=reasoning
+            reasoning=reasoning,
+            debug=debug
         )
+    
+    debug.append(f"  → Rule 1 conditions not met")
     
     # ========================================================================
     # RULE 3: BTTS streak + venue match + opponent goal streak
     # ========================================================================
+    debug.append(f"\n--- RULE 3 CHECK (BTTS Streak + Opponent Goal Streak) ---")
+    
     # Check home team's BTTS at home
     home_btts, home_btts_streak = home.has_reliable_btts(match_venue)
+    debug.append(f"\n  Checking {home.name} (HOME) BTTS streak:")
+    debug.append(f"    has_reliable_btts({match_venue}): {home_btts}")
+    if home_btts_streak:
+        debug.append(f"    → {home_btts_streak.display}")
     
     if home_btts:
         away_goal, away_goal_streak = away.has_goal_streak(match_venue)
+        debug.append(f"\n  Checking opponent {away.name} goal streak:")
+        debug.append(f"    has_goal_streak({match_venue}): {away_goal}")
+        if away_goal_streak:
+            debug.append(f"    → {away_goal_streak.display}")
+        
         if away_goal:
             reasoning.append(f"\n✅ RULE 3 TRIGGERED (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {home.name}: {home_btts_streak.display}")
             reasoning.append(f"   • Opponent ({away.name}): {away_goal_streak.display}")
+            debug.append(f"\n✅ RULE 3 TRIGGERED (Home BTTS + Away goal streak) → BTTS Yes")
             
             # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
+            debug.append(f"\n--- VOLUME CHECK (Over 2.5) ---")
+            debug.append(f"  {home.name} has_volume_streak: {home_vol}")
+            if home_vol_streak:
+                debug.append(f"    → {home_vol_streak.display}")
+            debug.append(f"  {away.name} has_volume_streak: {away_vol}")
+            if away_vol_streak:
+                debug.append(f"    → {away_vol_streak.display}")
+            
             over_under = None
             if home_vol and away_vol:
                 reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
                 over_under = "Over 2.5"
+                debug.append(f"  → Both have volume → Over 2.5")
             else:
                 reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
+                debug.append(f"  → Not both have volume → No Over bet")
             
             return PredictionResult(
                 btts_prediction="BTTS Yes",
                 over_under=over_under,
                 triggered_rule="Rule 3 (BTTS Streak)",
-                reasoning=reasoning
+                reasoning=reasoning,
+                debug=debug
             )
+        else:
+            debug.append(f"  → Opponent has no goal streak → Rule 3 not triggered")
     
     # Check away team's BTTS away
     away_btts, away_btts_streak = away.has_reliable_btts(match_venue)
+    debug.append(f"\n  Checking {away.name} (AWAY) BTTS streak:")
+    debug.append(f"    has_reliable_btts({match_venue}): {away_btts}")
+    if away_btts_streak:
+        debug.append(f"    → {away_btts_streak.display}")
     
     if away_btts:
         home_goal, home_goal_streak = home.has_goal_streak(match_venue)
+        debug.append(f"\n  Checking opponent {home.name} goal streak:")
+        debug.append(f"    has_goal_streak({match_venue}): {home_goal}")
+        if home_goal_streak:
+            debug.append(f"    → {home_goal_streak.display}")
+        
         if home_goal:
             reasoning.append(f"\n✅ RULE 3 TRIGGERED (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {away.name}: {away_btts_streak.display}")
             reasoning.append(f"   • Opponent ({home.name}): {home_goal_streak.display}")
+            debug.append(f"\n✅ RULE 3 TRIGGERED (Away BTTS + Home goal streak) → BTTS Yes")
             
             # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
+            debug.append(f"\n--- VOLUME CHECK (Over 2.5) ---")
+            debug.append(f"  {home.name} has_volume_streak: {home_vol}")
+            if home_vol_streak:
+                debug.append(f"    → {home_vol_streak.display}")
+            debug.append(f"  {away.name} has_volume_streak: {away_vol}")
+            if away_vol_streak:
+                debug.append(f"    → {away_vol_streak.display}")
+            
             over_under = None
             if home_vol and away_vol:
                 reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
                 over_under = "Over 2.5"
+                debug.append(f"  → Both have volume → Over 2.5")
             else:
                 reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
+                debug.append(f"  → Not both have volume → No Over bet")
             
             return PredictionResult(
                 btts_prediction="BTTS Yes",
                 over_under=over_under,
                 triggered_rule="Rule 3 (BTTS Streak)",
-                reasoning=reasoning
+                reasoning=reasoning,
+                debug=debug
             )
+        else:
+            debug.append(f"  → Opponent has no goal streak → Rule 3 not triggered")
+    
+    debug.append(f"\n→ No BTTS streaks found with venue match")
     
     # ========================================================================
     # NO RULE TRIGGERED
     # ========================================================================
     reasoning.append(f"\n❌ NO RULE TRIGGERED → No bet")
+    debug.append(f"\n❌ NO RULE TRIGGERED → No bet")
+    
     return PredictionResult(
         btts_prediction="No bet",
         over_under=None,
         triggered_rule="No bet",
-        reasoning=reasoning
+        reasoning=reasoning,
+        debug=debug
     )
-
 
 # ============================================================================
 # UI HELPER FUNCTIONS
@@ -411,7 +543,6 @@ def create_streak_input(streak_type: str, key_prefix: str):
             key=f"{key_prefix}_{streak_type}_away"
         )
     return plain, home, away
-
 
 def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
     team = TeamStreaks(name=name, is_home=is_home)
@@ -448,7 +579,6 @@ def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
     
     return team
 
-
 # ============================================================================
 # MAIN APP
 # ============================================================================
@@ -467,9 +597,9 @@ def main():
     
     col1, col2 = st.columns(2)
     with col1:
-        home_name = st.text_input("🏠 Home Team (First)", "Home Team", key="home_name")
+        home_name = st.text_input("🏠 Home Team (First)", "Catanzaro", key="home_name")
     with col2:
-        away_name = st.text_input("✈️ Away Team (Second)", "Away Team", key="away_name")
+        away_name = st.text_input("✈️ Away Team (Second)", "Modena", key="away_name")
     
     match_venue = "home"
     
@@ -546,6 +676,10 @@ def main():
                     st.info(line)
                 else:
                     st.write(line)
+        
+        # DEBUG OUTPUT - This will show you exactly what the code is doing
+        with st.expander("🐛 DEBUG OUTPUT (Click to see internal calculations)", expanded=False):
+            st.code("\n".join(result.debug), language="text")
     
     st.divider()
     st.markdown("""
@@ -558,7 +692,6 @@ def main():
     | **Rule 3** | Any "BTTS" (reliable + venue match + opponent goal streak) | **BTTS Yes** |
     | **Else** | — | **No bet** |
     """)
-
 
 if __name__ == "__main__":
     main()
