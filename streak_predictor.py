@@ -261,7 +261,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     # ========================================================================
     # THEIRS RULE 1: Any No BTTS → BTTS NO
     # ========================================================================
-    if home.has_no_btts() or away.has_no_btts():
+    if home.has_no_btts_matching_venue() or away.has_no_btts_matching_venue():
         trigger_team = home.name if home.has_no_btts() else away.name
         reasoning.append(f"\n✅ **THEIRS RULE 1 TRIGGERED** (BTTS NO)")
         reasoning.append(f"   • {trigger_team}: Has No BTTS streak")
