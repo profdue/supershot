@@ -13,8 +13,6 @@ Complete implementation with:
 import streamlit as st
 from dataclasses import dataclass, field
 from typing import Optional, Tuple, List, Dict, Any
-from enum import Enum
-
 
 # ============================================================================
 # PAGE CONFIG
@@ -26,7 +24,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-
 # ============================================================================
 # CSS STYLES
 # ============================================================================
@@ -37,7 +34,6 @@ st.markdown("""
         padding-bottom: 2rem;
         max-width: 900px;
     }
-    
     .prediction-card {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border-radius: 24px;
@@ -45,43 +41,34 @@ st.markdown("""
         margin: 1.5rem 0;
         text-align: center;
         border: 1px solid #334155;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
     }
-    
     .prediction-btts-yes {
         font-size: 2.5rem;
         font-weight: 800;
         color: #10b981;
-        letter-spacing: 2px;
     }
-    
     .prediction-btts-no {
         font-size: 2.5rem;
         font-weight: 800;
         color: #ef4444;
-        letter-spacing: 2px;
     }
-    
     .prediction-nobet {
         font-size: 2rem;
         font-weight: 700;
         color: #f59e0b;
     }
-    
     .prediction-over {
         font-size: 1.3rem;
         font-weight: 600;
         color: #fbbf24;
         margin-top: 0.5rem;
     }
-    
     .prediction-under {
         font-size: 1.3rem;
         font-weight: 600;
         color: #8b5cf6;
         margin-top: 0.5rem;
     }
-    
     .team-header-home {
         background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
         border-radius: 16px;
@@ -89,7 +76,6 @@ st.markdown("""
         margin: 0.5rem 0;
         border-left: 4px solid #3b82f6;
     }
-    
     .team-header-away {
         background: linear-gradient(135deg, #5f1e3a 0%, #0f172a 100%);
         border-radius: 16px;
@@ -97,13 +83,11 @@ st.markdown("""
         margin: 0.5rem 0;
         border-left: 4px solid #ef4444;
     }
-    
     .team-name {
         font-size: 1.2rem;
         font-weight: 700;
         margin-bottom: 0.75rem;
     }
-    
     .venue-note {
         background: #0f172a;
         border-radius: 8px;
@@ -113,19 +97,12 @@ st.markdown("""
         color: #94a3b8;
         margin-bottom: 1rem;
     }
-    
     h1 {
         background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800;
     }
-    
-    hr {
-        margin: 1.5rem 0;
-        border-color: #334155;
-    }
-    
     .stButton button {
         background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
         color: white;
@@ -134,29 +111,21 @@ st.markdown("""
         padding: 0.6rem 1rem;
         border: none;
         width: 100%;
-        transition: transform 0.2s;
-    }
-    
-    .stButton button:hover {
-        transform: translateY(-2px);
     }
 </style>
 """, unsafe_allow_html=True)
-
 
 # ============================================================================
 # DATA MODELS
 # ============================================================================
 @dataclass
 class Streak:
-    """Single streak with type, length, icon, and reliability"""
     streak_type: str
     length: int
     icon: str  # "", "🏠", "✈️"
     
     @property
     def is_reliable(self) -> bool:
-        """Regression filter: streak ≤ 10 is reliable"""
         return self.length <= 10
     
     @property
@@ -165,7 +134,6 @@ class Streak:
         return f"{self.streak_type.replace('_', ' ').title()}{icon_str} {self.length}"
     
     def venue_matches(self, match_venue: str) -> bool:
-        """Venue filter: 🏠 only home, ✈️ only away, plain anywhere"""
         if not self.icon:
             return True
         if self.icon == "🏠":
@@ -174,10 +142,8 @@ class Streak:
             return match_venue == "away"
         return False
 
-
 @dataclass
 class TeamStreaks:
-    """Collection of all streaks for a team"""
     name: str
     is_home: bool = True
     scoring: List[Streak] = field(default_factory=list)
@@ -186,26 +152,19 @@ class TeamStreaks:
     over25: List[Streak] = field(default_factory=list)
     goals2: List[Streak] = field(default_factory=list)
     
-    @property
-    def venue(self) -> str:
-        return "home" if self.is_home else "away"
-    
     def get_best_streak(self, streak_list: List[Streak], match_venue: str) -> Optional[Streak]:
-        """Get longest streak that passes venue filter"""
         valid = [s for s in streak_list if s.venue_matches(match_venue)]
         if not valid:
             return None
         return max(valid, key=lambda x: x.length)
     
     def has_reliable_no_btts(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        """Check for reliable No BTTS streak with venue match"""
         streak = self.get_best_streak(self.no_btts, match_venue)
         if streak and streak.is_reliable:
             return True, streak
         return False, None
     
     def has_reliable_scoring_plain(self, min_length: int = 3) -> Tuple[bool, Optional[Streak]]:
-        """Check for reliable plain Scoring streak (no icon)"""
         plain_streaks = [s for s in self.scoring if not s.icon]
         if not plain_streaks:
             return False, None
@@ -215,55 +174,44 @@ class TeamStreaks:
         return False, None
     
     def has_reliable_btts(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        """Check for reliable BTTS streak with venue match"""
         streak = self.get_best_streak(self.btts, match_venue)
         if streak and streak.is_reliable:
             return True, streak
         return False, None
     
     def has_goal_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        """Check for ANY goal streak with venue match"""
-        # Check scoring
+        # Check scoring (plain, 🏠, ✈️ with venue match)
         scoring = self.get_best_streak(self.scoring, match_venue)
         if scoring and scoring.is_reliable:
             return True, scoring
-        
         # Check BTTS
         btts = self.get_best_streak(self.btts, match_venue)
         if btts and btts.is_reliable:
             return True, btts
-        
-        # Check volume (Over 2.5)
-        over25 = self.get_best_streak(self.over25, match_venue)
-        if over25 and over25.is_reliable:
-            return True, over25
-        
-        # Check Goals 2+
-        goals2 = self.get_best_streak(self.goals2, match_venue)
-        if goals2 and goals2.is_reliable:
-            return True, goals2
-        
-        return False, None
-    
-    def has_volume_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        """Check for volume streak (Over 2.5, Goals 2+, or BTTS) with venue match"""
         # Check Over 2.5
         over25 = self.get_best_streak(self.over25, match_venue)
         if over25 and over25.is_reliable:
             return True, over25
-        
         # Check Goals 2+
         goals2 = self.get_best_streak(self.goals2, match_venue)
         if goals2 and goals2.is_reliable:
             return True, goals2
-        
-        # Check BTTS as volume
+        return False, None
+    
+    def has_volume_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
+        # Check Over 2.5
+        over25 = self.get_best_streak(self.over25, match_venue)
+        if over25 and over25.is_reliable:
+            return True, over25
+        # Check Goals 2+
+        goals2 = self.get_best_streak(self.goals2, match_venue)
+        if goals2 and goals2.is_reliable:
+            return True, goals2
+        # Check BTTS as volume indicator
         btts = self.get_best_streak(self.btts, match_venue)
         if btts and btts.is_reliable:
             return True, btts
-        
         return False, None
-
 
 @dataclass
 class PredictionResult:
@@ -271,45 +219,39 @@ class PredictionResult:
     over_under: Optional[str]
     triggered_rule: str
     reasoning: List[str]
-    rule_details: Dict[str, Any] = field(default_factory=dict)
-
 
 # ============================================================================
 # PREDICTION LOGIC
 # ============================================================================
 def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> PredictionResult:
     reasoning = []
-    rule_details = {}
     
-    reasoning.append(f"📊 **Filters Applied:**")
-    reasoning.append(f"   • Regression: Only streaks ≤ 10 are reliable")
-    reasoning.append(f"   • Venue: 🏠 icon only applies at home, ✈️ icon only applies away")
+    reasoning.append("📊 Filters Applied:")
+    reasoning.append("   • Regression: Only streaks ≤ 10 are reliable")
+    reasoning.append(f"   • Venue: 🏠 only home, ✈️ only away, plain anywhere")
     reasoning.append(f"   • Current venue: {match_venue.upper()}")
     
     # ========================================================================
     # RULE 2: Any "No BTTS" (Priority)
     # ========================================================================
-    home_no_btts, home_no_streak = home.has_reliable_no_btts(match_venue)
-    away_no_btts, away_no_streak = away.has_reliable_no_btts(match_venue)
+    home_no, home_no_streak = home.has_reliable_no_btts(match_venue)
+    away_no, away_no_streak = away.has_reliable_no_btts(match_venue)
     
-    if home_no_btts or away_no_btts:
+    if home_no or away_no:
         no_teams = []
-        if home_no_btts:
+        if home_no:
             no_teams.append((home_no_streak.length, home.name, home_no_streak))
-        if away_no_btts:
+        if away_no:
             no_teams.append((away_no_streak.length, away.name, away_no_streak))
-        
         longest_len, longest_team, longest_streak = max(no_teams, key=lambda x: x[0])
         
-        reasoning.append(f"\n✅ **RULE 2 TRIGGERED** (BTTS No - Priority)")
+        reasoning.append(f"\n✅ RULE 2 TRIGGERED (BTTS No)")
         reasoning.append(f"   • {longest_team}: {longest_streak.display}")
-        
         return PredictionResult(
             btts_prediction="BTTS No",
             over_under="Under 2.5 lean",
             triggered_rule="Rule 2 (BTTS No)",
-            reasoning=reasoning,
-            rule_details={"rule": "Rule 2", "trigger_team": longest_team, "streak": longest_streak.display}
+            reasoning=reasoning
         )
     
     # ========================================================================
@@ -318,151 +260,162 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
     home_scoring, home_sc_streak = home.has_reliable_scoring_plain(min_length=3)
     away_scoring, away_sc_streak = away.has_reliable_scoring_plain(min_length=3)
     
-    home_has_no_btts, _ = home.has_reliable_no_btts(match_venue)
-    away_has_no_btts, _ = away.has_reliable_no_btts(match_venue)
+    # Check for No BTTS streaks (must be absent)
+    home_has_no, _ = home.has_reliable_no_btts(match_venue)
+    away_has_no, _ = away.has_reliable_no_btts(match_venue)
     
-    if home_scoring and away_scoring and not home_has_no_btts and not away_has_no_btts:
-        reasoning.append(f"\n✅ **RULE 1 TRIGGERED** (BTTS Yes from Plain Scoring)")
+    if home_scoring and away_scoring and not home_has_no and not away_has_no:
+        reasoning.append(f"\n✅ RULE 1 TRIGGERED (BTTS Yes from Plain Scoring)")
         reasoning.append(f"   • {home.name}: {home_sc_streak.display}")
         reasoning.append(f"   • {away.name}: {away_sc_streak.display}")
         
+        # Volume check for Over 2.5
         home_vol, home_vol_streak = home.has_volume_streak(match_venue)
         away_vol, away_vol_streak = away.has_volume_streak(match_venue)
         
         over_under = None
         if home_vol and away_vol:
-            reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
+            reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
             over_under = "Over 2.5"
         else:
-            reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
+            reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
         
         return PredictionResult(
             btts_prediction="BTTS Yes",
             over_under=over_under,
             triggered_rule="Rule 1 (Plain Scoring)",
-            reasoning=reasoning,
-            rule_details={"rule": "Rule 1", "home_streak": home_sc_streak.display, "away_streak": away_sc_streak.display}
+            reasoning=reasoning
         )
     
     # ========================================================================
     # RULE 3: BTTS streak + venue match + opponent goal streak
     # ========================================================================
-    # Check home team's BTTS
+    # Check home team's BTTS at home
     home_btts, home_btts_streak = home.has_reliable_btts(match_venue)
     
     if home_btts:
         away_goal, away_goal_streak = away.has_goal_streak(match_venue)
-        
         if away_goal:
-            reasoning.append(f"\n✅ **RULE 3 TRIGGERED** (BTTS Yes from BTTS Streak)")
+            reasoning.append(f"\n✅ RULE 3 TRIGGERED (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {home.name}: {home_btts_streak.display}")
             reasoning.append(f"   • Opponent ({away.name}): {away_goal_streak.display}")
             
+            # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
             over_under = None
             if home_vol and away_vol:
-                reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
+                reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
                 over_under = "Over 2.5"
             else:
-                reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
+                reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
             
             return PredictionResult(
                 btts_prediction="BTTS Yes",
                 over_under=over_under,
-                triggered_rule="Rule 3 (BTTS Streak - Home)",
-                reasoning=reasoning,
-                rule_details={"rule": "Rule 3", "trigger_team": home.name, "trigger_streak": home_btts_streak.display}
+                triggered_rule="Rule 3 (BTTS Streak)",
+                reasoning=reasoning
             )
     
-    # Check away team's BTTS
+    # Check away team's BTTS away
     away_btts, away_btts_streak = away.has_reliable_btts(match_venue)
     
     if away_btts:
         home_goal, home_goal_streak = home.has_goal_streak(match_venue)
-        
         if home_goal:
-            reasoning.append(f"\n✅ **RULE 3 TRIGGERED** (BTTS Yes from BTTS Streak)")
+            reasoning.append(f"\n✅ RULE 3 TRIGGERED (BTTS Yes from BTTS Streak)")
             reasoning.append(f"   • {away.name}: {away_btts_streak.display}")
             reasoning.append(f"   • Opponent ({home.name}): {home_goal_streak.display}")
             
+            # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
             over_under = None
             if home_vol and away_vol:
-                reasoning.append(f"\n📊 **Volume Check PASSED** → Over 2.5")
+                reasoning.append(f"\n📊 Volume Check PASSED → Over 2.5")
                 over_under = "Over 2.5"
             else:
-                reasoning.append(f"\n📊 **Volume Check FAILED** → No Over bet")
+                reasoning.append(f"\n📊 Volume Check FAILED → No Over bet")
             
             return PredictionResult(
                 btts_prediction="BTTS Yes",
                 over_under=over_under,
-                triggered_rule="Rule 3 (BTTS Streak - Away)",
-                reasoning=reasoning,
-                rule_details={"rule": "Rule 3", "trigger_team": away.name, "trigger_streak": away_btts_streak.display}
+                triggered_rule="Rule 3 (BTTS Streak)",
+                reasoning=reasoning
             )
     
     # ========================================================================
     # NO RULE TRIGGERED
     # ========================================================================
-    reasoning.append(f"\n❌ **NO RULE TRIGGERED** → No bet")
-    
+    reasoning.append(f"\n❌ NO RULE TRIGGERED → No bet")
     return PredictionResult(
         btts_prediction="No bet",
         over_under=None,
         triggered_rule="No bet",
-        reasoning=reasoning,
-        rule_details={}
+        reasoning=reasoning
     )
-
 
 # ============================================================================
 # UI HELPER FUNCTIONS
 # ============================================================================
-def create_streak_input(streak_type: str, key_prefix: str, default_plain: int = 0, default_home: int = 0, default_away: int = 0):
+def create_streak_input(streak_type: str, key_prefix: str):
     col1, col2, col3 = st.columns(3)
     with col1:
-        plain = st.number_input(f"{streak_type} (plain)", min_value=0, max_value=30, value=default_plain, key=f"{key_prefix}_{streak_type}_plain")
+        plain = st.number_input(
+            f"{streak_type} (plain)",
+            min_value=0, max_value=30, value=0,
+            key=f"{key_prefix}_{streak_type}_plain"
+        )
     with col2:
-        home = st.number_input(f"{streak_type} (🏠 home)", min_value=0, max_value=30, value=default_home, key=f"{key_prefix}_{streak_type}_home")
+        home = st.number_input(
+            f"{streak_type} (🏠 home)",
+            min_value=0, max_value=30, value=0,
+            key=f"{key_prefix}_{streak_type}_home"
+        )
     with col3:
-        away = st.number_input(f"{streak_type} (✈️ away)", min_value=0, max_value=30, value=default_away, key=f"{key_prefix}_{streak_type}_away")
+        away = st.number_input(
+            f"{streak_type} (✈️ away)",
+            min_value=0, max_value=30, value=0,
+            key=f"{key_prefix}_{streak_type}_away"
+        )
     return plain, home, away
-
 
 def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
     team = TeamStreaks(name=name, is_home=is_home)
     
+    # Scoring
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
         length = st.session_state.get(f"{prefix}_scoring_{suffix}", 0)
         if length > 0:
             team.scoring.append(Streak("scoring", length, icon))
     
+    # No BTTS
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
         length = st.session_state.get(f"{prefix}_no_btts_{suffix}", 0)
         if length > 0:
             team.no_btts.append(Streak("no_btts", length, icon))
     
+    # BTTS
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
         length = st.session_state.get(f"{prefix}_btts_{suffix}", 0)
         if length > 0:
             team.btts.append(Streak("btts", length, icon))
     
+    # Over 2.5
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
         length = st.session_state.get(f"{prefix}_over25_{suffix}", 0)
         if length > 0:
             team.over25.append(Streak("over25", length, icon))
     
+    # Goals 2+
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
         length = st.session_state.get(f"{prefix}_goals2_{suffix}", 0)
         if length > 0:
             team.goals2.append(Streak("goals2", length, icon))
     
     return team
-
 
 # ============================================================================
 # MAIN APP
@@ -495,16 +448,12 @@ def main():
     
     with st.expander("📊 Scoring Streaks", expanded=True):
         create_streak_input("Scoring", "home")
-    
     with st.expander("🚫 No BTTS Streaks", expanded=False):
         create_streak_input("No BTTS", "home")
-    
     with st.expander("⚡ BTTS Streaks", expanded=False):
         create_streak_input("BTTS", "home")
-    
     with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
         create_streak_input("Over 2.5", "home")
-    
     with st.expander("🎯 Goals 2+ Streaks", expanded=False):
         create_streak_input("Goals 2+", "home")
     
@@ -515,16 +464,12 @@ def main():
     
     with st.expander("📊 Scoring Streaks", expanded=True):
         create_streak_input("Scoring", "away")
-    
     with st.expander("🚫 No BTTS Streaks", expanded=False):
         create_streak_input("No BTTS", "away")
-    
     with st.expander("⚡ BTTS Streaks", expanded=False):
         create_streak_input("BTTS", "away")
-    
     with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
         create_streak_input("Over 2.5", "away")
-    
     with st.expander("🎯 Goals 2+ Streaks", expanded=False):
         create_streak_input("Goals 2+", "away")
     
@@ -559,19 +504,28 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        with st.expander("📋 Detailed Reasoning & Rule Check", expanded=True):
+        with st.expander("📋 Detailed Reasoning", expanded=True):
             for line in result.reasoning:
-                if "✅" in line and "RULE" in line:
+                if "✅" in line:
                     st.success(line)
-                elif "✅" in line:
-                    st.info(line)
                 elif "❌" in line:
                     st.error(line)
                 elif "📊" in line:
                     st.info(line)
                 else:
                     st.write(line)
-
+    
+    st.divider()
+    st.markdown("""
+    ### 📋 Rules Summary
+    
+    | Rule | Trigger | Prediction |
+    |------|---------|------------|
+    | **Rule 2** | Any "No BTTS" (reliable + venue match) | **BTTS No** |
+    | **Rule 1** | Both plain Scoring ≥3 (reliable + no No BTTS) | **BTTS Yes** |
+    | **Rule 3** | Any "BTTS" (reliable + venue match + opponent goal streak) | **BTTS Yes** |
+    | **Else** | — | **No bet** |
+    """)
 
 if __name__ == "__main__":
     main()
