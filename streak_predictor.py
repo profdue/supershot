@@ -1,18 +1,19 @@
 """
 Streak Predictor - BTTS & Over/Under Betting System
 Complete implementation with:
-- THEIRS RULE 1: Any No BTTS 2+ → BTTS NO
-- THEIRS RULE 2: Home Scoring 🏠 3+ & Away Scoring ✈️ 3+ → BTTS YES + OVER 2.5
+- THEIRS RULE 1: Any No BTTS → BTTS NO
+- THEIRS RULE 2: Home Scoring 🏠 & Away Scoring ✈️ → BTTS YES + OVER 2.5
 - THEIRS RULE 3: Both teams have Scoring (any) → BTTS YES + OVER 1.5
 - OURS RULE 2: Both plain Scoring → BTTS YES + OVER 1.5
 - OURS RULE 3: BTTS icon + opponent goal → BTTS YES + OVER 1.5
 - Venue filter: 🏠 only home, ✈️ only away, plain anywhere
 - First team = Home, Second team = Away (automatic)
+- NO NUMBER INPUTS - just checkboxes
 """
 
 import streamlit as st
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
+from typing import Optional, List
 
 # ============================================================================
 # PAGE CONFIG
@@ -124,6 +125,9 @@ st.markdown("""
     hr {
         margin: 1rem 0;
     }
+    .stCheckbox {
+        margin: 0.25rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -135,13 +139,11 @@ st.markdown("""
 class Streak:
     streak_type: str
     icon: str  # "", "🏠", "✈️"
-    length: int = 1  # For No BTTS rule, we need length
     
     @property
     def display(self) -> str:
         icon_str = f" {self.icon}" if self.icon else ""
-        length_str = f" {self.length}" if self.length > 1 else ""
-        return f"{self.streak_type.replace('_', ' ').title()}{icon_str}{length_str}"
+        return f"{self.streak_type.replace('_', ' ').title()}{icon_str}"
     
     def venue_matches(self, team_venue: str) -> bool:
         if not self.icon:
@@ -160,61 +162,55 @@ class TeamStreaks:
     scoring: List[Streak] = field(default_factory=list)
     no_btts: List[Streak] = field(default_factory=list)
     btts: List[Streak] = field(default_factory=list)
-    over25: List[Streak] = field(default_factory=list)
     goals2: List[Streak] = field(default_factory=list)
     
     @property
     def venue(self) -> str:
         return "home" if self.is_home else "away"
     
+    def has_any_streak(self, streak_list: List[Streak]) -> bool:
+        return len(streak_list) > 0
+    
+    def has_streak_matching_venue(self, streak_list: List[Streak]) -> bool:
+        for s in streak_list:
+            if s.venue_matches(self.venue):
+                return True
+        return False
+    
     def get_matching_streaks(self, streak_list: List[Streak]) -> List[Streak]:
         return [s for s in streak_list if s.venue_matches(self.venue)]
     
-    def has_any_matching_streak(self, streak_list: List[Streak]) -> bool:
-        return len(self.get_matching_streaks(streak_list)) > 0
+    # ========================================================================
+    # THEIRS RULE 1: Any No BTTS (assumed 2+)
+    # ========================================================================
+    def has_no_btts(self) -> bool:
+        return self.has_any_streak(self.no_btts)
     
     # ========================================================================
-    # THEIRS RULE 1: Any No BTTS 2+ (any venue)
+    # THEIRS RULE 2: Home Scoring 🏠 / Away Scoring ✈️
     # ========================================================================
-    def has_no_btts_2plus(self) -> bool:
-        """Check if team has ANY No BTTS streak of 2+ matches (any icon, any venue)"""
-        for s in self.no_btts:
-            if s.length >= 2:
-                return True
-        return False
-    
-    # ========================================================================
-    # THEIRS RULE 2: Home Scoring 🏠 3+ (for home team)
-    # ========================================================================
-    def has_scoring_home_3plus(self) -> bool:
-        """Check if team has Scoring 🏠 streak of 3+ matches"""
+    def has_scoring_home(self) -> bool:
         for s in self.scoring:
-            if s.icon == "🏠" and s.length >= 3:
+            if s.icon == "🏠":
                 return True
         return False
     
-    # ========================================================================
-    # THEIRS RULE 2: Away Scoring ✈️ 3+ (for away team)
-    # ========================================================================
-    def has_scoring_away_3plus(self) -> bool:
-        """Check if team has Scoring ✈️ streak of 3+ matches"""
+    def has_scoring_away(self) -> bool:
         for s in self.scoring:
-            if s.icon == "✈️" and s.length >= 3:
+            if s.icon == "✈️":
                 return True
         return False
     
     # ========================================================================
-    # THEIRS RULE 3: Both teams have Scoring (any)
+    # THEIRS RULE 3: Any Scoring (any icon)
     # ========================================================================
     def has_any_scoring(self) -> bool:
-        """Check if team has ANY Scoring streak (any icon, any length)"""
-        return len(self.scoring) > 0
+        return self.has_any_streak(self.scoring)
     
     # ========================================================================
-    # OURS RULE 2: Both plain Scoring
+    # OURS RULE 2: Plain Scoring (no icon)
     # ========================================================================
     def has_plain_scoring(self) -> bool:
-        """Check if team has plain Scoring icon (no 🏠 or ✈️)"""
         for s in self.scoring:
             if not s.icon:
                 return True
@@ -224,28 +220,21 @@ class TeamStreaks:
     # OURS RULE 3: BTTS icon matching venue + opponent goal
     # ========================================================================
     def has_btts_matching_venue(self) -> bool:
-        """Check if team has BTTS icon matching their venue"""
-        return self.has_any_matching_streak(self.btts)
+        return self.has_streak_matching_venue(self.btts)
     
     def has_goal_streak_matching_venue(self) -> bool:
-        """Check if team has ANY goal streak matching their venue"""
-        if self.has_any_matching_streak(self.scoring):
+        if self.has_streak_matching_venue(self.scoring):
             return True
-        if self.has_any_matching_streak(self.btts):
+        if self.has_streak_matching_venue(self.btts):
             return True
-        if self.has_any_matching_streak(self.over25):
-            return True
-        if self.has_any_matching_streak(self.goals2):
+        if self.has_streak_matching_venue(self.goals2):
             return True
         return False
     
     def has_volume_streak_matching_venue(self) -> bool:
-        """Check for volume streak matching venue"""
-        if self.has_any_matching_streak(self.over25):
+        if self.has_streak_matching_venue(self.goals2):
             return True
-        if self.has_any_matching_streak(self.goals2):
-            return True
-        if self.has_any_matching_streak(self.btts):
+        if self.has_streak_matching_venue(self.btts):
             return True
         return False
 
@@ -270,50 +259,41 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     reasoning.append(f"   • {away.name}: Playing AWAY")
     
     # ========================================================================
-    # THEIRS RULE 1: Any No BTTS 2+ → BTTS NO
+    # THEIRS RULE 1: Any No BTTS → BTTS NO
     # ========================================================================
-    home_no = home.has_no_btts_2plus()
-    away_no = away.has_no_btts_2plus()
-    
-    if home_no or away_no:
-        trigger_team = home.name if home_no else away.name
+    if home.has_no_btts() or away.has_no_btts():
+        trigger_team = home.name if home.has_no_btts() else away.name
         reasoning.append(f"\n✅ **THEIRS RULE 1 TRIGGERED** (BTTS NO)")
-        reasoning.append(f"   • {trigger_team}: Has No BTTS streak of 2+ matches")
+        reasoning.append(f"   • {trigger_team}: Has No BTTS streak")
         reasoning.append(f"   • This rule is 17/17 (100%) across all matches")
         
         return PredictionResult(
             btts_prediction="BTTS No",
             over_prediction=None,
-            triggered_rule="THEIRS Rule 1 (No BTTS 2+)",
+            triggered_rule="THEIRS Rule 1 (No BTTS)",
             reasoning=reasoning
         )
     
     # ========================================================================
-    # THEIRS RULE 2: Home Scoring 🏠 3+ & Away Scoring ✈️ 3+ → BTTS YES + OVER 2.5
+    # THEIRS RULE 2: Home Scoring 🏠 & Away Scoring ✈️ → BTTS YES + OVER 2.5
     # ========================================================================
-    home_scoring_home = home.has_scoring_home_3plus()
-    away_scoring_away = away.has_scoring_away_3plus()
-    
-    if home_scoring_home and away_scoring_away:
+    if home.has_scoring_home() and away.has_scoring_away():
         reasoning.append(f"\n✅ **THEIRS RULE 2 TRIGGERED** (BTTS YES + OVER 2.5)")
-        reasoning.append(f"   • {home.name}: Has Scoring 🏠 streak of 3+ matches")
-        reasoning.append(f"   • {away.name}: Has Scoring ✈️ streak of 3+ matches")
+        reasoning.append(f"   • {home.name}: Has Scoring 🏠 streak")
+        reasoning.append(f"   • {away.name}: Has Scoring ✈️ streak")
         reasoning.append(f"   • This rule is 8/8 (100%) for both BTTS and Over 2.5")
         
         return PredictionResult(
             btts_prediction="BTTS Yes",
             over_prediction="Over 2.5",
-            triggered_rule="THEIRS Rule 2 (Home 🏠 + Away ✈️ Scoring 3+)",
+            triggered_rule="THEIRS Rule 2 (Home 🏠 + Away ✈️ Scoring)",
             reasoning=reasoning
         )
     
     # ========================================================================
     # THEIRS RULE 3: Both teams have Scoring (any) → BTTS YES + OVER 1.5
     # ========================================================================
-    home_any_scoring = home.has_any_scoring()
-    away_any_scoring = away.has_any_scoring()
-    
-    if home_any_scoring and away_any_scoring:
+    if home.has_any_scoring() and away.has_any_scoring():
         reasoning.append(f"\n✅ **THEIRS RULE 3 TRIGGERED** (BTTS YES + OVER 1.5)")
         reasoning.append(f"   • {home.name}: Has Scoring streak")
         reasoning.append(f"   • {away.name}: Has Scoring streak")
@@ -330,10 +310,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     # ========================================================================
     # OURS RULE 2: Both plain Scoring → BTTS YES + OVER 1.5
     # ========================================================================
-    home_plain_scoring = home.has_plain_scoring()
-    away_plain_scoring = away.has_plain_scoring()
-    
-    if home_plain_scoring and away_plain_scoring:
+    if home.has_plain_scoring() and away.has_plain_scoring():
         reasoning.append(f"\n✅ **OURS RULE 2 TRIGGERED** (BTTS YES + OVER 1.5)")
         reasoning.append(f"   • {home.name}: Has plain Scoring icon")
         reasoning.append(f"   • {away.name}: Has plain Scoring icon")
@@ -348,12 +325,11 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
         )
     
     # ========================================================================
-    # OURS RULE 3: BTTS icon matching venue + opponent goal → BTTS YES
+    # OURS RULE 3: BTTS icon + opponent goal → BTTS YES
     # ========================================================================
     home_btts = home.has_btts_matching_venue()
     away_btts = away.has_btts_matching_venue()
     
-    # Check home team's BTTS
     if home_btts:
         away_goal = away.has_goal_streak_matching_venue()
         if away_goal:
@@ -362,7 +338,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
             reasoning.append(f"   • Opponent ({away.name}): Has goal icon matching their venue")
             reasoning.append(f"   • This rule is 6/6 (100%) for BTTS")
             
-            # Volume check for Over
             home_vol = home.has_volume_streak_matching_venue()
             away_vol = away.has_volume_streak_matching_venue()
             
@@ -380,7 +355,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
                 reasoning=reasoning
             )
     
-    # Check away team's BTTS
     if away_btts:
         home_goal = home.has_goal_streak_matching_venue()
         if home_goal:
@@ -389,7 +363,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
             reasoning.append(f"   • Opponent ({home.name}): Has goal icon matching their venue")
             reasoning.append(f"   • This rule is 6/6 (100%) for BTTS")
             
-            # Volume check for Over
             home_vol = home.has_volume_streak_matching_venue()
             away_vol = away.has_volume_streak_matching_venue()
             
@@ -411,8 +384,8 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     # NO RULE TRIGGERED
     # ========================================================================
     reasoning.append(f"\n❌ **NO RULE TRIGGERED** → No bet")
-    reasoning.append(f"   • THEIRS RULE 1: No No BTTS 2+")
-    reasoning.append(f"   • THEIRS RULE 2: Not (Home 🏠 3+ and Away ✈️ 3+)")
+    reasoning.append(f"   • THEIRS RULE 1: No No BTTS streak")
+    reasoning.append(f"   • THEIRS RULE 2: Not (Home 🏠 and Away ✈️ Scoring)")
     reasoning.append(f"   • THEIRS RULE 3: Not both have Scoring")
     reasoning.append(f"   • OURS RULE 2: Not both plain Scoring")
     reasoning.append(f"   • OURS RULE 3: No BTTS icon + opponent goal combo")
@@ -428,111 +401,73 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
 # ============================================================================
 # UI HELPER FUNCTIONS
 # ============================================================================
-def streak_input_with_length(streak_name: str, key_prefix: str):
-    """Create icon-based input with length selector"""
-    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+def streak_checkboxes(streak_name: str, key_prefix: str):
+    """Create icon-based checkboxes for a streak type - NO NUMBERS"""
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        has_plain = st.checkbox(
+        plain = st.checkbox(
             f"Plain {streak_name}",
-            key=f"{key_prefix}_{streak_name}_plain_has"
+            key=f"{key_prefix}_{streak_name}_plain",
+            help="No icon - applies to any venue"
         )
-        plain_len = 0
-        if has_plain:
-            plain_len = st.number_input(
-                "Length",
-                min_value=1, max_value=30, value=1,
-                key=f"{key_prefix}_{streak_name}_plain_len",
-                label_visibility="collapsed"
-            )
     
     with col2:
-        has_home = st.checkbox(
+        home = st.checkbox(
             f"🏠 Home {streak_name}",
-            key=f"{key_prefix}_{streak_name}_home_has"
+            key=f"{key_prefix}_{streak_name}_home",
+            help="🏠 icon - only applies when team plays at HOME"
         )
-        home_len = 0
-        if has_home:
-            home_len = st.number_input(
-                "Length",
-                min_value=1, max_value=30, value=1,
-                key=f"{key_prefix}_{streak_name}_home_len",
-                label_visibility="collapsed"
-            )
     
     with col3:
-        has_away = st.checkbox(
+        away = st.checkbox(
             f"✈️ Away {streak_name}",
-            key=f"{key_prefix}_{streak_name}_away_has"
+            key=f"{key_prefix}_{streak_name}_away",
+            help="✈️ icon - only applies when team plays AWAY"
         )
-        away_len = 0
-        if has_away:
-            away_len = st.number_input(
-                "Length",
-                min_value=1, max_value=30, value=1,
-                key=f"{key_prefix}_{streak_name}_away_len",
-                label_visibility="collapsed"
-            )
     
-    with col4:
-        st.markdown(" ")  # Placeholder
-    
-    return (has_plain, plain_len), (has_home, home_len), (has_away, away_len)
+    return plain, home, away
 
 
-def build_team_from_input(prefix: str, name: str, is_home: bool) -> TeamStreaks:
-    """Build TeamStreaks object from UI selections"""
+def build_team_from_checkboxes(prefix: str, name: str, is_home: bool) -> TeamStreaks:
+    """Build TeamStreaks object from checkbox selections - NO NUMBERS"""
     team = TeamStreaks(name=name, is_home=is_home)
     
     # Scoring
-    (plain_has, plain_len), (home_has, home_len), (away_has, away_len) = \
-        st.session_state.get(f"{prefix}_Scoring", ((False,0), (False,0), (False,0)))
-    if plain_has:
-        team.scoring.append(Streak("scoring", "", plain_len))
-    if home_has:
-        team.scoring.append(Streak("scoring", "🏠", home_len))
-    if away_has:
-        team.scoring.append(Streak("scoring", "✈️", away_len))
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_Scoring", (False, False, False))
+    if plain:
+        team.scoring.append(Streak("scoring", ""))
+    if home_icon:
+        team.scoring.append(Streak("scoring", "🏠"))
+    if away_icon:
+        team.scoring.append(Streak("scoring", "✈️"))
     
     # No BTTS
-    (plain_has, plain_len), (home_has, home_len), (away_has, away_len) = \
-        st.session_state.get(f"{prefix}_No BTTS", ((False,0), (False,0), (False,0)))
-    if plain_has:
-        team.no_btts.append(Streak("no_btts", "", plain_len))
-    if home_has:
-        team.no_btts.append(Streak("no_btts", "🏠", home_len))
-    if away_has:
-        team.no_btts.append(Streak("no_btts", "✈️", away_len))
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_No BTTS", (False, False, False))
+    if plain:
+        team.no_btts.append(Streak("no_btts", ""))
+    if home_icon:
+        team.no_btts.append(Streak("no_btts", "🏠"))
+    if away_icon:
+        team.no_btts.append(Streak("no_btts", "✈️"))
     
     # BTTS
-    (plain_has, plain_len), (home_has, home_len), (away_has, away_len) = \
-        st.session_state.get(f"{prefix}_BTTS", ((False,0), (False,0), (False,0)))
-    if plain_has:
-        team.btts.append(Streak("btts", "", plain_len))
-    if home_has:
-        team.btts.append(Streak("btts", "🏠", home_len))
-    if away_has:
-        team.btts.append(Streak("btts", "✈️", away_len))
-    
-    # Over 2.5
-    (plain_has, plain_len), (home_has, home_len), (away_has, away_len) = \
-        st.session_state.get(f"{prefix}_Over 2.5", ((False,0), (False,0), (False,0)))
-    if plain_has:
-        team.over25.append(Streak("over25", "", plain_len))
-    if home_has:
-        team.over25.append(Streak("over25", "🏠", home_len))
-    if away_has:
-        team.over25.append(Streak("over25", "✈️", away_len))
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_BTTS", (False, False, False))
+    if plain:
+        team.btts.append(Streak("btts", ""))
+    if home_icon:
+        team.btts.append(Streak("btts", "🏠"))
+    if away_icon:
+        team.btts.append(Streak("btts", "✈️"))
     
     # Goals 2+
-    (plain_has, plain_len), (home_has, home_len), (away_has, away_len) = \
-        st.session_state.get(f"{prefix}_Goals 2+", ((False,0), (False,0), (False,0)))
-    if plain_has:
-        team.goals2.append(Streak("goals2", "", plain_len))
-    if home_has:
-        team.goals2.append(Streak("goals2", "🏠", home_len))
-    if away_has:
-        team.goals2.append(Streak("goals2", "✈️", away_len))
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_Goals 2+", (False, False, False))
+    if plain:
+        team.goals2.append(Streak("goals2", ""))
+    if home_icon:
+        team.goals2.append(Streak("goals2", "🏠"))
+    if away_icon:
+        team.goals2.append(Streak("goals2", "✈️"))
     
     return team
 
@@ -548,7 +483,7 @@ def main():
     <div class="venue-note">
         🏟️ <strong>Venue Auto-Detected:</strong> First team = HOME | Second team = AWAY<br>
         🏠 streaks apply to first team | ✈️ streaks apply to second team | Plain streaks apply to both<br>
-        📏 <strong>Enter streak length</strong> (number of consecutive matches)
+        ✅ <strong>Simply check the boxes</strong> for streaks that exist. No numbers needed.
     </div>
     """, unsafe_allow_html=True)
     
@@ -565,26 +500,22 @@ def main():
     # ========================================================================
     # HOME TEAM STREAKS
     # ========================================================================
-    st.markdown(f"<div class='team-header-home'><span class='team-name'>🏠 {home_name} (HOME)</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='team-header-home'><span class='team-name'>🏠 {home_name} (HOME)</span><br><span style='font-size:0.7rem;'>🏠 streaks apply | ✈️ streaks are IGNORED | Plain streaks apply</span></div>", unsafe_allow_html=True)
     
     with st.expander("📊 Scoring Streaks", expanded=True):
-        data = streak_input_with_length("Scoring", "home")
+        data = streak_checkboxes("Scoring", "home")
         st.session_state["home_Scoring"] = data
     
     with st.expander("🚫 No BTTS Streaks", expanded=False):
-        data = streak_input_with_length("No BTTS", "home")
+        data = streak_checkboxes("No BTTS", "home")
         st.session_state["home_No BTTS"] = data
     
     with st.expander("⚡ BTTS Streaks", expanded=False):
-        data = streak_input_with_length("BTTS", "home")
+        data = streak_checkboxes("BTTS", "home")
         st.session_state["home_BTTS"] = data
     
-    with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
-        data = streak_input_with_length("Over 2.5", "home")
-        st.session_state["home_Over 2.5"] = data
-    
     with st.expander("🎯 Goals 2+ Streaks", expanded=False):
-        data = streak_input_with_length("Goals 2+", "home")
+        data = streak_checkboxes("Goals 2+", "home")
         st.session_state["home_Goals 2+"] = data
     
     st.divider()
@@ -592,26 +523,22 @@ def main():
     # ========================================================================
     # AWAY TEAM STREAKS
     # ========================================================================
-    st.markdown(f"<div class='team-header-away'><span class='team-name'>✈️ {away_name} (AWAY)</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='team-header-away'><span class='team-name'>✈️ {away_name} (AWAY)</span><br><span style='font-size:0.7rem;'>✈️ streaks apply | 🏠 streaks are IGNORED | Plain streaks apply</span></div>", unsafe_allow_html=True)
     
     with st.expander("📊 Scoring Streaks", expanded=True):
-        data = streak_input_with_length("Scoring", "away")
+        data = streak_checkboxes("Scoring", "away")
         st.session_state["away_Scoring"] = data
     
     with st.expander("🚫 No BTTS Streaks", expanded=False):
-        data = streak_input_with_length("No BTTS", "away")
+        data = streak_checkboxes("No BTTS", "away")
         st.session_state["away_No BTTS"] = data
     
     with st.expander("⚡ BTTS Streaks", expanded=False):
-        data = streak_input_with_length("BTTS", "away")
+        data = streak_checkboxes("BTTS", "away")
         st.session_state["away_BTTS"] = data
     
-    with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
-        data = streak_input_with_length("Over 2.5", "away")
-        st.session_state["away_Over 2.5"] = data
-    
     with st.expander("🎯 Goals 2+ Streaks", expanded=False):
-        data = streak_input_with_length("Goals 2+", "away")
+        data = streak_checkboxes("Goals 2+", "away")
         st.session_state["away_Goals 2+"] = data
     
     st.divider()
@@ -620,8 +547,8 @@ def main():
     # PREDICT BUTTON
     # ========================================================================
     if st.button("🔮 PREDICT", type="primary"):
-        home_team = build_team_from_input("home", home_name, is_home=True)
-        away_team = build_team_from_input("away", away_name, is_home=False)
+        home_team = build_team_from_checkboxes("home", home_name, is_home=True)
+        away_team = build_team_from_checkboxes("away", away_name, is_home=False)
         
         result = predict_match(home_team, away_team)
         
@@ -663,8 +590,8 @@ def main():
     
     | Priority | Rule | BTTS | Over | Record |
     |----------|------|------|------|--------|
-    | 1 | Any No BTTS 2+ | **NO** | — | 17/17 |
-    | 2 | Home Scoring 🏠 3+ & Away Scoring ✈️ 3+ | **YES** | **2.5** | 8/8 |
+    | 1 | Any No BTTS | **NO** | — | 17/17 |
+    | 2 | Home Scoring 🏠 & Away Scoring ✈️ | **YES** | **2.5** | 8/8 |
     | 3 | Both teams have Scoring (any) | **YES** | **1.5** | 10/10 |
     | 4 | Both plain Scoring | **YES** | **1.5** | 8/8 |
     | 5 | BTTS icon + opponent goal | **YES** | **1.5** | 6/6 |
@@ -673,15 +600,12 @@ def main():
     ### 🎯 How to Use
     
     1. Enter **Home Team** (left) and **Away Team** (right)
-    2. For each streak type, **check the box** if the streak exists
-    3. **Enter the streak length** (number of consecutive matches)
+    2. For each streak type, **check the boxes** for streaks that exist
+    3. Pay attention to icons:
+       - 🏠 = home streak (only counts for home team)
+       - ✈️ = away streak (only counts for away team)
+       - Plain = applies to both
     4. Click **PREDICT**
-    
-    ### 📊 Streak Icons
-    
-    - 🏠 = Home streak (only counts for home team)
-    - ✈️ = Away streak (only counts for away team)
-    - Plain = Applies to both
     
     ### ✅ Validation
     
