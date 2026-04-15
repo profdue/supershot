@@ -12,7 +12,7 @@ Complete implementation with:
 
 import streamlit as st
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List
 
 # ============================================================================
 # PAGE CONFIG
@@ -142,6 +142,7 @@ class Streak:
             return match_venue == "away"
         return False
 
+
 @dataclass
 class TeamStreaks:
     name: str
@@ -179,50 +180,66 @@ class TeamStreaks:
             return True, streak
         return False, None
     
-def has_goal_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-    # FIRST: Check plain streaks (no icon) - these always count regardless of venue
-    plain_scoring = [s for s in self.scoring if not s.icon]
-    if plain_scoring:
-        best_plain = max(plain_scoring, key=lambda x: x.length)
-        if best_plain.is_reliable:
-            return True, best_plain
+    def has_goal_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
+        # FIRST: Check plain streaks (no icon) - these always count regardless of venue
+        plain_scoring = [s for s in self.scoring if not s.icon]
+        if plain_scoring:
+            best_plain = max(plain_scoring, key=lambda x: x.length)
+            if best_plain.is_reliable:
+                return True, best_plain
+        
+        plain_btts = [s for s in self.btts if not s.icon]
+        if plain_btts:
+            best_plain = max(plain_btts, key=lambda x: x.length)
+            if best_plain.is_reliable:
+                return True, best_plain
+        
+        plain_over25 = [s for s in self.over25 if not s.icon]
+        if plain_over25:
+            best_plain = max(plain_over25, key=lambda x: x.length)
+            if best_plain.is_reliable:
+                return True, best_plain
+        
+        plain_goals2 = [s for s in self.goals2 if not s.icon]
+        if plain_goals2:
+            best_plain = max(plain_goals2, key=lambda x: x.length)
+            if best_plain.is_reliable:
+                return True, best_plain
+        
+        # SECOND: Check icon-specific streaks with venue match
+        scoring = self.get_best_streak(self.scoring, match_venue)
+        if scoring and scoring.is_reliable and scoring.icon:
+            return True, scoring
+        
+        btts = self.get_best_streak(self.btts, match_venue)
+        if btts and btts.is_reliable and btts.icon:
+            return True, btts
+        
+        over25 = self.get_best_streak(self.over25, match_venue)
+        if over25 and over25.is_reliable and over25.icon:
+            return True, over25
+        
+        goals2 = self.get_best_streak(self.goals2, match_venue)
+        if goals2 and goals2.is_reliable and goals2.icon:
+            return True, goals2
+        
+        return False, None
     
-    plain_btts = [s for s in self.btts if not s.icon]
-    if plain_btts:
-        best_plain = max(plain_btts, key=lambda x: x.length)
-        if best_plain.is_reliable:
-            return True, best_plain
-    
-    plain_over25 = [s for s in self.over25 if not s.icon]
-    if plain_over25:
-        best_plain = max(plain_over25, key=lambda x: x.length)
-        if best_plain.is_reliable:
-            return True, best_plain
-    
-    plain_goals2 = [s for s in self.goals2 if not s.icon]
-    if plain_goals2:
-        best_plain = max(plain_goals2, key=lambda x: x.length)
-        if best_plain.is_reliable:
-            return True, best_plain
-    
-    # SECOND: Check icon-specific streaks with venue match
-    scoring = self.get_best_streak(self.scoring, match_venue)
-    if scoring and scoring.is_reliable and scoring.icon:
-        return True, scoring
-    
-    btts = self.get_best_streak(self.btts, match_venue)
-    if btts and btts.is_reliable and btts.icon:
-        return True, btts
-    
-    over25 = self.get_best_streak(self.over25, match_venue)
-    if over25 and over25.is_reliable and over25.icon:
-        return True, over25
-    
-    goals2 = self.get_best_streak(self.goals2, match_venue)
-    if goals2 and goals2.is_reliable and goals2.icon:
-        return True, goals2
-    
-    return False, None
+    def has_volume_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
+        # Check Over 2.5
+        over25 = self.get_best_streak(self.over25, match_venue)
+        if over25 and over25.is_reliable:
+            return True, over25
+        # Check Goals 2+
+        goals2 = self.get_best_streak(self.goals2, match_venue)
+        if goals2 and goals2.is_reliable:
+            return True, goals2
+        # Check BTTS as volume indicator
+        btts = self.get_best_streak(self.btts, match_venue)
+        if btts and btts.is_reliable:
+            return True, btts
+        return False, None
+
 
 @dataclass
 class PredictionResult:
@@ -230,6 +247,7 @@ class PredictionResult:
     over_under: Optional[str]
     triggered_rule: str
     reasoning: List[str]
+
 
 # ============================================================================
 # PREDICTION LOGIC
@@ -368,6 +386,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         reasoning=reasoning
     )
 
+
 # ============================================================================
 # UI HELPER FUNCTIONS
 # ============================================================================
@@ -392,6 +411,7 @@ def create_streak_input(streak_type: str, key_prefix: str):
             key=f"{key_prefix}_{streak_type}_away"
         )
     return plain, home, away
+
 
 def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
     team = TeamStreaks(name=name, is_home=is_home)
@@ -427,6 +447,7 @@ def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
             team.goals2.append(Streak("goals2", length, icon))
     
     return team
+
 
 # ============================================================================
 # MAIN APP
@@ -537,6 +558,7 @@ def main():
     | **Rule 3** | Any "BTTS" (reliable + venue match + opponent goal streak) | **BTTS Yes** |
     | **Else** | — | **No bet** |
     """)
+
 
 if __name__ == "__main__":
     main()
