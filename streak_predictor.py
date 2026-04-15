@@ -13,7 +13,7 @@ Complete implementation with:
 
 import streamlit as st
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List
 
 # ============================================================================
 # PAGE CONFIG
@@ -113,15 +113,6 @@ st.markdown("""
         border: none;
         width: 100%;
     }
-    .debug-box {
-        background: #0f172a;
-        border-radius: 12px;
-        padding: 1rem;
-        margin-top: 1rem;
-        font-family: monospace;
-        font-size: 0.75rem;
-        border: 1px solid #334155;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -151,6 +142,7 @@ class Streak:
         if self.icon == "✈️":
             return match_venue == "away"
         return False
+
 
 @dataclass
 class TeamStreaks:
@@ -190,8 +182,6 @@ class TeamStreaks:
         return False, None
     
     def has_goal_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        """Check if team has ANY goal streak (plain or icon-specific with venue match)"""
-        
         # FIRST: Check plain streaks (no icon) - these always count regardless of venue
         plain_scoring = [s for s in self.scoring if not s.icon]
         if plain_scoring:
@@ -237,19 +227,17 @@ class TeamStreaks:
         return False, None
     
     def has_volume_streak(self, match_venue: str) -> Tuple[bool, Optional[Streak]]:
-        # Check Over 2.5
         over25 = self.get_best_streak(self.over25, match_venue)
         if over25 and over25.is_reliable:
             return True, over25
-        # Check Goals 2+
         goals2 = self.get_best_streak(self.goals2, match_venue)
         if goals2 and goals2.is_reliable:
             return True, goals2
-        # Check BTTS as volume indicator
         btts = self.get_best_streak(self.btts, match_venue)
         if btts and btts.is_reliable:
             return True, btts
         return False, None
+
 
 @dataclass
 class PredictionResult:
@@ -258,6 +246,7 @@ class PredictionResult:
     triggered_rule: str
     reasoning: List[str]
     debug: List[str] = field(default_factory=list)
+
 
 # ============================================================================
 # PREDICTION LOGIC
@@ -352,7 +341,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
     if away_sc_streak:
         debug.append(f"    → {away_sc_streak.display}")
     
-    # Check for No BTTS streaks (must be absent)
     home_has_no, _ = home.has_reliable_no_btts(match_venue)
     away_has_no, _ = away.has_reliable_no_btts(match_venue)
     
@@ -365,7 +353,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         reasoning.append(f"   • {away.name}: {away_sc_streak.display}")
         debug.append(f"\n✅ RULE 1 TRIGGERED → BTTS Yes")
         
-        # Volume check for Over 2.5
         home_vol, home_vol_streak = home.has_volume_streak(match_venue)
         away_vol, away_vol_streak = away.has_volume_streak(match_venue)
         
@@ -401,7 +388,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
     # ========================================================================
     debug.append(f"\n--- RULE 3 CHECK (BTTS Streak + Opponent Goal Streak) ---")
     
-    # Check home team's BTTS at home
     home_btts, home_btts_streak = home.has_reliable_btts(match_venue)
     debug.append(f"\n  Checking {home.name} (HOME) BTTS streak:")
     debug.append(f"    has_reliable_btts({match_venue}): {home_btts}")
@@ -421,7 +407,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
             reasoning.append(f"   • Opponent ({away.name}): {away_goal_streak.display}")
             debug.append(f"\n✅ RULE 3 TRIGGERED (Home BTTS + Away goal streak) → BTTS Yes")
             
-            # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
@@ -452,7 +437,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         else:
             debug.append(f"  → Opponent has no goal streak → Rule 3 not triggered")
     
-    # Check away team's BTTS away
     away_btts, away_btts_streak = away.has_reliable_btts(match_venue)
     debug.append(f"\n  Checking {away.name} (AWAY) BTTS streak:")
     debug.append(f"    has_reliable_btts({match_venue}): {away_btts}")
@@ -472,7 +456,6 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
             reasoning.append(f"   • Opponent ({home.name}): {home_goal_streak.display}")
             debug.append(f"\n✅ RULE 3 TRIGGERED (Away BTTS + Home goal streak) → BTTS Yes")
             
-            # Volume check for Over 2.5
             home_vol, home_vol_streak = home.has_volume_streak(match_venue)
             away_vol, away_vol_streak = away.has_volume_streak(match_venue)
             
@@ -519,65 +502,69 @@ def predict_match(home: TeamStreaks, away: TeamStreaks, match_venue: str) -> Pre
         debug=debug
     )
 
+
 # ============================================================================
 # UI HELPER FUNCTIONS
 # ============================================================================
 def create_streak_input(streak_type: str, key_prefix: str):
+    """Create 3-column input for plain/home/away streaks"""
     col1, col2, col3 = st.columns(3)
     with col1:
-        plain = st.number_input(
+        st.number_input(
             f"{streak_type} (plain)",
             min_value=0, max_value=30, value=0,
             key=f"{key_prefix}_{streak_type}_plain"
         )
     with col2:
-        home = st.number_input(
+        st.number_input(
             f"{streak_type} (🏠 home)",
             min_value=0, max_value=30, value=0,
             key=f"{key_prefix}_{streak_type}_home"
         )
     with col3:
-        away = st.number_input(
+        st.number_input(
             f"{streak_type} (✈️ away)",
             min_value=0, max_value=30, value=0,
             key=f"{key_prefix}_{streak_type}_away"
         )
-    return plain, home, away
+
 
 def streaks_from_session(prefix: str, name: str, is_home: bool) -> TeamStreaks:
+    """Build TeamStreaks object from session state using exact key names"""
     team = TeamStreaks(name=name, is_home=is_home)
     
-    # Scoring
+    # Scoring - matches create_streak_input key format
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
-        length = st.session_state.get(f"{prefix}_scoring_{suffix}", 0)
+        length = st.session_state.get(f"{prefix}_Scoring_{suffix}", 0)
         if length > 0:
             team.scoring.append(Streak("scoring", length, icon))
     
     # No BTTS
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
-        length = st.session_state.get(f"{prefix}_no_btts_{suffix}", 0)
+        length = st.session_state.get(f"{prefix}_No BTTS_{suffix}", 0)
         if length > 0:
             team.no_btts.append(Streak("no_btts", length, icon))
     
     # BTTS
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
-        length = st.session_state.get(f"{prefix}_btts_{suffix}", 0)
+        length = st.session_state.get(f"{prefix}_BTTS_{suffix}", 0)
         if length > 0:
             team.btts.append(Streak("btts", length, icon))
     
     # Over 2.5
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
-        length = st.session_state.get(f"{prefix}_over25_{suffix}", 0)
+        length = st.session_state.get(f"{prefix}_Over 2.5_{suffix}", 0)
         if length > 0:
             team.over25.append(Streak("over25", length, icon))
     
     # Goals 2+
     for icon, suffix in [("", "plain"), ("🏠", "home"), ("✈️", "away")]:
-        length = st.session_state.get(f"{prefix}_goals2_{suffix}", 0)
+        length = st.session_state.get(f"{prefix}_Goals 2+_{suffix}", 0)
         if length > 0:
             team.goals2.append(Streak("goals2", length, icon))
     
     return team
+
 
 # ============================================================================
 # MAIN APP
@@ -677,7 +664,6 @@ def main():
                 else:
                     st.write(line)
         
-        # DEBUG OUTPUT - This will show you exactly what the code is doing
         with st.expander("🐛 DEBUG OUTPUT (Click to see internal calculations)", expanded=False):
             st.code("\n".join(result.debug), language="text")
     
@@ -692,6 +678,7 @@ def main():
     | **Rule 3** | Any "BTTS" (reliable + venue match + opponent goal streak) | **BTTS Yes** |
     | **Else** | — | **No bet** |
     """)
+
 
 if __name__ == "__main__":
     main()
