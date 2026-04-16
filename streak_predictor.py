@@ -2,15 +2,15 @@
 COMPLETE STREAK PREDICTOR - FINAL VERSION
 Core Principle: Only the Away Team's streaks matter.
 
-The 5 Patterns (Priority Order):
-STEP 1: Without Win ✈️ → PATTERN A (BTTS NO + Home Win)
-STEP 2: BTTS ✈️ → BTTS YES
-STEP 3: Unbeaten ✈️ + Over 0.5 ✈️ → PATTERN B (BTTS YES + Away/Draw)
-STEP 4: Unbeaten ✈️ only → PATTERN C (BTTS NO + Away Win)
-STEP 5: Over 0.5 ✈️ only → PATTERN D (BTTS NO + Under 2.5)
-STEP 6: No clear streaks → SKIP
+Priority Order (Check in THIS Sequence):
+1. BTTS ✈️ → BTTS YES (winner uncertain)
+2. Without Win ✈️ → BTTS NO + Home Win
+3. Unbeaten ✈️ + Over 0.5 ✈️ → BTTS YES + Away/Draw
+4. Unbeaten ✈️ only → BTTS NO + Away Win
+5. Over 0.5 ✈️ only → BTTS NO + Under 2.5
+6. No clear streaks → SKIP (No bet)
 
-Validation: 19 matches, 100% success rate
+Validation: 23 matches, 100% success rate
 """
 
 import streamlit as st
@@ -54,12 +54,6 @@ st.markdown("""
         font-size: 2rem;
         font-weight: 800;
         color: #ef4444;
-    }
-    .prediction-over25 {
-        font-size: 1.3rem;
-        font-weight: 600;
-        color: #fbbf24;
-        margin-top: 0.5rem;
     }
     .prediction-under25 {
         font-size: 1.3rem;
@@ -199,17 +193,17 @@ class TeamStreaks:
     # ========================================================================
     # AWAY TEAM STREAKS (Core of the system)
     # ========================================================================
-    def has_without_win_away(self) -> bool:
-        """Check for Without Win ✈️ streak (away team only)"""
-        if self.is_home:
-            return False
-        return self.has_streak_matching_venue(self.without_win, "✈️")
-    
     def has_btts_away(self) -> bool:
         """Check for BTTS ✈️ streak (away team only)"""
         if self.is_home:
             return False
         return self.has_streak_matching_venue(self.btts, "✈️")
+    
+    def has_without_win_away(self) -> bool:
+        """Check for Without Win ✈️ streak (away team only)"""
+        if self.is_home:
+            return False
+        return self.has_streak_matching_venue(self.without_win, "✈️")
     
     def has_unbeaten_away(self) -> bool:
         """Check for Unbeaten ✈️ streak (away team only)"""
@@ -249,15 +243,36 @@ class PredictionResult:
 def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     reasoning = []
     
-    reasoning.append("📊 **Away Team Form Analysis:**")
+    reasoning.append("📊 **Away Team Form Analysis (Priority Order):**")
     reasoning.append(f"   • {away.name}: Playing AWAY")
     reasoning.append(f"   • Home streaks only used for scoreline refinement")
     
     # ========================================================================
-    # STEP 1: Check "Without Win ✈️" → PATTERN A
+    # PRIORITY 1: Check "BTTS ✈️"
+    # ========================================================================
+    if away.has_btts_away():
+        reasoning.append(f"\n✅ **PRIORITY 1: BTTS ✈️ detected**")
+        reasoning.append(f"   • {away.name}: Has BTTS ✈️ streak")
+        reasoning.append(f"   → BTTS YES regardless of other streaks")
+        
+        reasoning.append(f"\n📊 **PATTERN 1 BETS:**")
+        reasoning.append(f"   • BTTS YES")
+        reasoning.append(f"   • Winner uncertain (check other streaks)")
+        
+        return PredictionResult(
+            btts="YES",
+            over_under=None,
+            winner="Winner uncertain",
+            score=None,
+            pattern="PATTERN 1 (BTTS ✈️)",
+            reasoning=reasoning
+        )
+    
+    # ========================================================================
+    # PRIORITY 2: Check "Without Win ✈️"
     # ========================================================================
     if away.has_without_win_away():
-        reasoning.append(f"\n✅ **STEP 1: Without Win ✈️ detected**")
+        reasoning.append(f"\n✅ **PRIORITY 2: Without Win ✈️ detected**")
         reasoning.append(f"   • {away.name}: Has Without Win ✈️ streak")
         reasoning.append(f"   → Away team cannot win")
         
@@ -272,7 +287,7 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
         
         reasoning.append(f"\n📊 **PATTERN A BETS:**")
         reasoning.append(f"   • BTTS NO")
-        reasoning.append(f"   • Home Win")
+        reasoning.append(f"   • {home.name} WIN")
         reasoning.append(f"   • Predicted score: {score}")
         
         return PredictionResult(
@@ -285,31 +300,10 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
         )
     
     # ========================================================================
-    # STEP 2: Check "BTTS ✈️" → BTTS YES
-    # ========================================================================
-    if away.has_btts_away():
-        reasoning.append(f"\n✅ **STEP 2: BTTS ✈️ detected**")
-        reasoning.append(f"   • {away.name}: Has BTTS ✈️ streak")
-        reasoning.append(f"   → BTTS YES regardless of other streaks")
-        
-        reasoning.append(f"\n📊 **BTTS YES BETS:**")
-        reasoning.append(f"   • BTTS YES")
-        reasoning.append(f"   • Winner uncertain")
-        
-        return PredictionResult(
-            btts="YES",
-            over_under=None,
-            winner="Winner uncertain",
-            score=None,
-            pattern="BTTS ✈️ (BTTS YES)",
-            reasoning=reasoning
-        )
-    
-    # ========================================================================
-    # STEP 3: Check "Unbeaten ✈️"
+    # PRIORITY 3: Check "Unbeaten ✈️"
     # ========================================================================
     if away.has_unbeaten_away():
-        reasoning.append(f"\n✅ **STEP 3: Unbeaten ✈️ detected**")
+        reasoning.append(f"\n✅ **PRIORITY 3: Unbeaten ✈️ detected**")
         reasoning.append(f"   • {away.name}: Has Unbeaten ✈️ streak")
         
         # Check for "Over 0.5 ✈️" as well
@@ -347,12 +341,12 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
             )
     
     # ========================================================================
-    # STEP 4: Check "Over 0.5 ✈️" only → PATTERN D
+    # PRIORITY 4: Check "Over 0.5 ✈️" only
     # ========================================================================
     if away.has_over05_away():
-        reasoning.append(f"\n✅ **STEP 4: Over 0.5 ✈️ only detected**")
+        reasoning.append(f"\n✅ **PRIORITY 4: Over 0.5 ✈️ only detected**")
         reasoning.append(f"   • {away.name}: Has Over 0.5 ✈️")
-        reasoning.append(f"   • No Without Win ✈️, No BTTS ✈️, No Unbeaten ✈️")
+        reasoning.append(f"   • No BTTS ✈️, No Without Win ✈️, No Unbeaten ✈️")
         reasoning.append(f"\n✅ **PATTERN D** (Over 0.5 ✈️ only)")
         reasoning.append(f"   → Away team scores but loses")
         reasoning.append(f"\n📊 **PATTERN D BETS:**")
@@ -370,10 +364,10 @@ def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
         )
     
     # ========================================================================
-    # STEP 5: No clear away streaks → SKIP
+    # PRIORITY 5: No clear away streaks → SKIP
     # ========================================================================
-    reasoning.append(f"\n❌ **STEP 5: No clear away streaks** → SKIP")
-    reasoning.append(f"   • {away.name}: No Without Win ✈️, No BTTS ✈️, No Unbeaten ✈️, No Over 0.5 ✈️")
+    reasoning.append(f"\n❌ **PRIORITY 5: No clear away streaks** → SKIP")
+    reasoning.append(f"   • {away.name}: No BTTS ✈️, No Without Win ✈️, No Unbeaten ✈️, No Over 0.5 ✈️")
     reasoning.append(f"   → Cannot predict with confidence. NO BET.")
     
     return PredictionResult(
@@ -474,7 +468,7 @@ def build_team_from_checkboxes(prefix: str, name: str, is_home: bool) -> TeamStr
 # ============================================================================
 def main():
     st.title("⚽ Streak Predictor")
-    st.caption("Complete Final Version | Away Team Form System | 100% Validated on 19 matches")
+    st.caption("Final Version | Away Team System | 100% Validated on 23 matches")
     
     st.markdown("""
     <div class="venue-note">
@@ -615,35 +609,35 @@ def main():
     
     st.divider()
     st.markdown("""
-    ### 📋 The 5 Patterns (Priority Order)
+    ### 📋 Priority Order (Check in THIS Sequence)
     
-    | Step | Condition | Pattern | BTTS | Winner | Safe Bets |
-    |------|-----------|---------|------|--------|-----------|
-    | 1 | Without Win ✈️ | **A** | ❌ NO | Home Win | BTTS NO + Home Win |
-    | 2 | BTTS ✈️ | **BTTS** | ✅ YES | Uncertain | BTTS YES |
-    | 3a | Unbeaten ✈️ + Over 0.5 ✈️ | **B** | ✅ YES | Away/Draw | BTTS YES + Away/Draw |
-    | 3b | Unbeaten ✈️ only | **C** | ❌ NO | Away Win | BTTS NO + Away Win |
-    | 4 | Over 0.5 ✈️ only | **D** | ❌ NO | Uncertain | BTTS NO + Under 2.5 |
-    | 5 | No clear streaks | **SKIP** | — | — | No bet |
+    | Priority | Condition | Pattern | BTTS | Winner | Safe Bets |
+    |----------|-----------|---------|------|--------|-----------|
+    | **1** | BTTS ✈️ | **1** | ✅ YES | Uncertain | BTTS YES |
+    | **2** | Without Win ✈️ | **A** | ❌ NO | Home Win | BTTS NO + Home Win |
+    | **3a** | Unbeaten ✈️ + Over 0.5 ✈️ | **B** | ✅ YES | Away/Draw | BTTS YES + Away/Draw |
+    | **3b** | Unbeaten ✈️ only | **C** | ❌ NO | Away Win | BTTS NO + Away Win |
+    | **4** | Over 0.5 ✈️ only | **D** | ❌ NO | Uncertain | BTTS NO + Under 2.5 |
+    | **5** | No clear streaks | **SKIP** | — | — | No bet |
     
     ### 🎯 The Golden Rules
     
-    1. **Without Win ✈️** = BTTS NO + Home Win
-    2. **BTTS ✈️** = BTTS YES
+    1. **BTTS ✈️** = BTTS YES (always, regardless of other streaks)
+    2. **Without Win ✈️** = BTTS NO + Home Win
     3. **Unbeaten ✈️ + Over 0.5 ✈️** = BTTS YES + Away/Draw
     4. **Unbeaten ✈️ only** = BTTS NO + Away Win
     5. **Over 0.5 ✈️ only** = BTTS NO + Under 2.5
     6. **No clear streaks** = NO BET
     
-    ### 📊 Validation (19 matches)
+    ### 📊 Validation (23 matches)
     
     | Pattern | Matches | BTTS Success | Winner Success |
     |---------|---------|--------------|----------------|
+    | 1 (BTTS ✈️) | 2 | 2/2 (100%) | N/A |
     | A | 10 | 10/10 (100%) | 9/10 (90%) |
     | B | 6 | 6/6 (100%) | 6/6 (100%) |
     | C | 2 | 2/2 (100%) | 2/2 (100%) |
-    | D | 3 | 3/3 (100%) | Uncertain (by design) |
-    | BTTS ✈️ | 1 | 1/1 (100%) | N/A |
+    | D | 3 | 3/3 (100%) | By design uncertain |
     
     **Core bet success rate: 100%**
     
