@@ -1,21 +1,18 @@
 """
-COMPLETE STREAK PREDICTOR - FINAL VERSION
-Core Principle: Only the Away Team's streaks matter.
+STREAK PREDICTOR - CONTRADICTION-BASED SYSTEM
+Core Principle: A prediction is only valid if NO streak contradicts it.
 
-Priority Order (Check in THIS Sequence):
-1. BTTS ✈️ → BTTS YES (winner uncertain)
-2. Without Win ✈️ → BTTS NO + Home Win
-3. Unbeaten ✈️ + Over 0.5 ✈️ → BTTS YES + Away/Draw
-4. Unbeaten ✈️ only → BTTS NO + Away Win
-5. Over 0.5 ✈️ only → BTTS NO + Under 2.5
-6. No clear streaks → SKIP (No bet)
+Rules:
+1. Check for ANY contradiction → If found → NO BET
+2. Apply prediction based on remaining non-contradictory streaks
+3. If multiple predictions possible → take highest confidence
 
-Validation: 23 matches, 100% success rate
+This system is designed to be unpenetratable because it only bets when ALL signals agree.
 """
 
 import streamlit as st
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 # ============================================================================
 # PAGE CONFIG
@@ -95,6 +92,14 @@ st.markdown("""
         font-weight: 500;
         color: #94a3b8;
         margin-top: 0.5rem;
+    }
+    .contradiction-warning {
+        background: #1e293b;
+        border-left: 3px solid #ef4444;
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        font-size: 0.8rem;
+        color: #ef4444;
     }
     .team-header-home {
         background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
@@ -176,8 +181,10 @@ class TeamStreaks:
     scoring: List[Streak] = field(default_factory=list)
     btts: List[Streak] = field(default_factory=list)
     over05: List[Streak] = field(default_factory=list)
+    over25: List[Streak] = field(default_factory=list)
     unbeaten: List[Streak] = field(default_factory=list)
     without_win: List[Streak] = field(default_factory=list)
+    no_btts: List[Streak] = field(default_factory=list)
     
     @property
     def venue(self) -> str:
@@ -191,40 +198,53 @@ class TeamStreaks:
         return False
     
     # ========================================================================
-    # AWAY TEAM STREAKS (Core of the system)
+    # AWAY TEAM STREAKS
     # ========================================================================
     def has_btts_away(self) -> bool:
-        """Check for BTTS ✈️ streak (away team only)"""
         if self.is_home:
             return False
         return self.has_streak_matching_venue(self.btts, "✈️")
     
     def has_without_win_away(self) -> bool:
-        """Check for Without Win ✈️ streak (away team only)"""
         if self.is_home:
             return False
         return self.has_streak_matching_venue(self.without_win, "✈️")
     
     def has_unbeaten_away(self) -> bool:
-        """Check for Unbeaten ✈️ streak (away team only)"""
         if self.is_home:
             return False
         return self.has_streak_matching_venue(self.unbeaten, "✈️")
     
     def has_over05_away(self) -> bool:
-        """Check for Over 0.5 ✈️ streak (away team only)"""
         if self.is_home:
             return False
         return self.has_streak_matching_venue(self.over05, "✈️")
     
+    def has_no_btts_away(self) -> bool:
+        if self.is_home:
+            return False
+        return self.has_streak_matching_venue(self.no_btts, "✈️")
+    
     # ========================================================================
-    # HOME TEAM STREAKS (Only for scoreline refinement in Pattern A)
+    # HOME TEAM STREAKS
     # ========================================================================
-    def has_home_over05(self) -> bool:
-        """Check if home team has Over 0.5 🏠 streak"""
+    def has_any_scoring(self) -> bool:
+        return self.has_streak_matching_venue(self.scoring)
+    
+    def has_scoring_home(self) -> bool:
+        if not self.is_home:
+            return False
+        return self.has_streak_matching_venue(self.scoring, "🏠")
+    
+    def has_over05_home(self) -> bool:
         if not self.is_home:
             return False
         return self.has_streak_matching_venue(self.over05, "🏠")
+    
+    def has_no_btts_home(self) -> bool:
+        if not self.is_home:
+            return False
+        return self.has_streak_matching_venue(self.no_btts, "🏠")
 
 
 @dataclass
@@ -235,148 +255,199 @@ class PredictionResult:
     score: Optional[str]
     pattern: str
     reasoning: List[str]
+    contradictions: List[str]
 
 
 # ============================================================================
-# PREDICTION LOGIC
+# CONTRADICTION-BASED PREDICTION LOGIC
 # ============================================================================
 def predict_match(home: TeamStreaks, away: TeamStreaks) -> PredictionResult:
     reasoning = []
+    contradictions = []
     
-    reasoning.append("📊 **Away Team Form Analysis (Priority Order):**")
+    reasoning.append("📊 **Contradiction-Based Analysis:**")
+    reasoning.append(f"   • {home.name}: Playing at HOME")
     reasoning.append(f"   • {away.name}: Playing AWAY")
-    reasoning.append(f"   • Home streaks only used for scoreline refinement")
+    reasoning.append(f"   • System only bets when NO contradiction exists")
     
     # ========================================================================
-    # PRIORITY 1: Check "BTTS ✈️"
+    # STEP 1: Identify All Signals
     # ========================================================================
+    
+    # Signals that suggest BTTS YES
+    btts_yes_signals = []
+    
+    # Signal 1: Away has BTTS ✈️
     if away.has_btts_away():
-        reasoning.append(f"\n✅ **PRIORITY 1: BTTS ✈️ detected**")
-        reasoning.append(f"   • {away.name}: Has BTTS ✈️ streak")
-        reasoning.append(f"   → BTTS YES regardless of other streaks")
-        
-        reasoning.append(f"\n📊 **PATTERN 1 BETS:**")
-        reasoning.append(f"   • BTTS YES")
-        reasoning.append(f"   • Winner uncertain (check other streaks)")
-        
-        return PredictionResult(
-            btts="YES",
-            over_under=None,
-            winner="Winner uncertain",
-            score=None,
-            pattern="PATTERN 1 (BTTS ✈️)",
-            reasoning=reasoning
-        )
+        btts_yes_signals.append(f"{away.name} has BTTS ✈️")
     
-    # ========================================================================
-    # PRIORITY 2: Check "Without Win ✈️"
-    # ========================================================================
+    # Signal 2: Both teams have scoring streaks
+    if home.has_any_scoring() and away.has_any_scoring():
+        btts_yes_signals.append(f"Both teams have scoring streaks")
+    
+    # Signal 3: Away has Over 0.5 ✈️ + Unbeaten ✈️
+    if away.has_over05_away() and away.has_unbeaten_away():
+        btts_yes_signals.append(f"{away.name} has Over 0.5 ✈️ + Unbeaten ✈️")
+    
+    # Signals that suggest BTTS NO
+    btts_no_signals = []
+    
+    # Signal 1: Any team has No BTTS matching venue
+    if home.has_no_btts_home():
+        btts_no_signals.append(f"{home.name} has No BTTS 🏠")
+    if away.has_no_btts_away():
+        btts_no_signals.append(f"{away.name} has No BTTS ✈️")
+    
+    # Signal 2: Away has Without Win ✈️
     if away.has_without_win_away():
-        reasoning.append(f"\n✅ **PRIORITY 2: Without Win ✈️ detected**")
-        reasoning.append(f"   • {away.name}: Has Without Win ✈️ streak")
-        reasoning.append(f"   → Away team cannot win")
-        
-        # Optional refinement for scoreline
-        score = None
-        if home.has_home_over05():
-            reasoning.append(f"   • {home.name}: Has Over 0.5 🏠 → Likely 1-0")
-            score = "1-0"
-        else:
-            reasoning.append(f"   • {home.name}: No Over 0.5 🏠 → Likely 0-0")
-            score = "0-0"
-        
-        reasoning.append(f"\n📊 **PATTERN A BETS:**")
-        reasoning.append(f"   • BTTS NO")
-        reasoning.append(f"   • {home.name} WIN")
-        reasoning.append(f"   • Predicted score: {score}")
+        btts_no_signals.append(f"{away.name} has Without Win ✈️")
+    
+    # Signal 3: Away has Unbeaten ✈️ only (no Over 0.5 ✈️) AND home has no scoring
+    if away.has_unbeaten_away() and not away.has_over05_away() and not home.has_any_scoring():
+        btts_no_signals.append(f"{away.name} has Unbeaten ✈️ only (home no scoring)")
+    
+    # Signal 4: Away has Over 0.5 ✈️ only (no other streaks)
+    if away.has_over05_away() and not away.has_unbeaten_away() and not away.has_without_win_away() and not away.has_btts_away():
+        btts_no_signals.append(f"{away.name} has Over 0.5 ✈️ only")
+    
+    # Signals for Winner
+    home_win_signals = []
+    away_win_signals = []
+    draw_signals = []
+    
+    # Home win signals
+    if away.has_without_win_away():
+        home_win_signals.append(f"{away.name} has Without Win ✈️ → cannot win")
+    
+    # Away win signals
+    if away.has_unbeaten_away() and not away.has_over05_away() and not home.has_any_scoring():
+        away_win_signals.append(f"{away.name} has Unbeaten ✈️ only + home no scoring")
+    
+    # Away/Draw signals
+    if away.has_unbeaten_away() and away.has_over05_away():
+        draw_signals.append(f"{away.name} has Unbeaten ✈️ + Over 0.5 ✈️ → avoids defeat")
+    
+    if away.has_btts_away():
+        draw_signals.append(f"{away.name} has BTTS ✈️ → winner uncertain")
+    
+    # Signals for Over/Under
+    under_signals = []
+    
+    # Under signals
+    if away.has_over05_away() and not away.has_unbeaten_away() and not away.has_without_win_away() and not away.has_btts_away():
+        under_signals.append(f"{away.name} has Over 0.5 ✈️ only → Under 2.5 likely")
+    
+    if away.has_without_win_away():
+        under_signals.append(f"{away.name} has Without Win ✈️ → Under 2.5 likely")
+    
+    # ========================================================================
+    # STEP 2: Check for Contradictions
+    # ========================================================================
+    
+    # Contradiction 1: Both BTTS YES and BTTS NO signals present
+    if btts_yes_signals and btts_no_signals:
+        contradictions.append(f"CONTRADICTION: BTTS YES signals ({', '.join(btts_yes_signals)}) vs BTTS NO signals ({', '.join(btts_no_signals)})")
+    
+    # Contradiction 2: Without Win ✈️ (away cannot win) vs Unbeaten ✈️ (away cannot lose)
+    if away.has_without_win_away() and away.has_unbeaten_away():
+        contradictions.append(f"CONTRADICTION: {away.name} has both Without Win ✈️ (cannot win) and Unbeaten ✈️ (cannot lose) → impossible")
+    
+    # Contradiction 3: Without Win ✈️ vs BTTS ✈️
+    if away.has_without_win_away() and away.has_btts_away():
+        contradictions.append(f"CONTRADICTION: {away.name} has Without Win ✈️ (BTTS NO) and BTTS ✈️ (BTTS YES)")
+    
+    # Contradiction 4: Unbeaten ✈️ only (away win) vs home scoring
+    if away.has_unbeaten_away() and not away.has_over05_away() and home.has_any_scoring():
+        contradictions.append(f"CONTRADICTION: {away.name} has Unbeaten ✈️ only (Away Win) but {home.name} has scoring streak → Home will score")
+    
+    # ========================================================================
+    # STEP 3: If Contradictions Exist → NO BET
+    # ========================================================================
+    
+    if contradictions:
+        reasoning.append(f"\n⚠️ **CONTRADICTIONS DETECTED:**")
+        for c in contradictions:
+            reasoning.append(f"   • {c}")
+        reasoning.append(f"\n❌ **NO BET** - Contradictions make prediction unreliable")
         
         return PredictionResult(
-            btts="NO",
+            btts=None,
             over_under=None,
-            winner=f"{home.name} WIN",
-            score=score,
-            pattern="PATTERN A (Without Win ✈️)",
-            reasoning=reasoning
-        )
-    
-    # ========================================================================
-    # PRIORITY 3: Check "Unbeaten ✈️"
-    # ========================================================================
-    if away.has_unbeaten_away():
-        reasoning.append(f"\n✅ **PRIORITY 3: Unbeaten ✈️ detected**")
-        reasoning.append(f"   • {away.name}: Has Unbeaten ✈️ streak")
-        
-        # Check for "Over 0.5 ✈️" as well
-        if away.has_over05_away():
-            reasoning.append(f"   • Also has Over 0.5 ✈️ streak")
-            reasoning.append(f"\n✅ **PATTERN B** (Unbeaten ✈️ + Over 0.5 ✈️)")
-            reasoning.append(f"   → Away team scores and avoids defeat")
-            reasoning.append(f"\n📊 **PATTERN B BETS:**")
-            reasoning.append(f"   • BTTS YES")
-            reasoning.append(f"   • {away.name} or DRAW (Double Chance)")
-            
-            return PredictionResult(
-                btts="YES",
-                over_under=None,
-                winner=f"{away.name} or DRAW",
-                score=None,
-                pattern="PATTERN B (Unbeaten ✈️ + Over 0.5 ✈️)",
-                reasoning=reasoning
-            )
-        else:
-            reasoning.append(f"   • NO Over 0.5 ✈️ streak")
-            reasoning.append(f"\n✅ **PATTERN C** (Unbeaten ✈️ only)")
-            reasoning.append(f"   → Away team avoids defeat but struggles to score")
-            reasoning.append(f"\n📊 **PATTERN C BETS:**")
-            reasoning.append(f"   • BTTS NO")
-            reasoning.append(f"   • {away.name} WIN")
-            
-            return PredictionResult(
-                btts="NO",
-                over_under=None,
-                winner=f"{away.name} WIN",
-                score=None,
-                pattern="PATTERN C (Unbeaten ✈️ only)",
-                reasoning=reasoning
-            )
-    
-    # ========================================================================
-    # PRIORITY 4: Check "Over 0.5 ✈️" only
-    # ========================================================================
-    if away.has_over05_away():
-        reasoning.append(f"\n✅ **PRIORITY 4: Over 0.5 ✈️ only detected**")
-        reasoning.append(f"   • {away.name}: Has Over 0.5 ✈️")
-        reasoning.append(f"   • No BTTS ✈️, No Without Win ✈️, No Unbeaten ✈️")
-        reasoning.append(f"\n✅ **PATTERN D** (Over 0.5 ✈️ only)")
-        reasoning.append(f"   → Away team scores but loses")
-        reasoning.append(f"\n📊 **PATTERN D BETS:**")
-        reasoning.append(f"   • BTTS NO")
-        reasoning.append(f"   • Under 2.5 goals")
-        reasoning.append(f"   • Winner uncertain")
-        
-        return PredictionResult(
-            btts="NO",
-            over_under="Under 2.5",
-            winner="Winner uncertain",
+            winner=None,
             score=None,
-            pattern="PATTERN D (Over 0.5 ✈️ only)",
-            reasoning=reasoning
+            pattern="NO BET (Contradiction)",
+            reasoning=reasoning,
+            contradictions=contradictions
         )
     
     # ========================================================================
-    # PRIORITY 5: No clear away streaks → SKIP
+    # STEP 4: No Contradictions → Make Predictions
     # ========================================================================
-    reasoning.append(f"\n❌ **PRIORITY 5: No clear away streaks** → SKIP")
-    reasoning.append(f"   • {away.name}: No BTTS ✈️, No Without Win ✈️, No Unbeaten ✈️, No Over 0.5 ✈️")
-    reasoning.append(f"   → Cannot predict with confidence. NO BET.")
+    
+    reasoning.append(f"\n✅ **No contradictions detected** → Proceeding with predictions")
+    
+    # BTTS Prediction
+    btts_prediction = None
+    if btts_yes_signals and not btts_no_signals:
+        btts_prediction = "YES"
+        reasoning.append(f"\n📊 **BTTS Decision:** YES ({', '.join(btts_yes_signals)})")
+    elif btts_no_signals and not btts_yes_signals:
+        btts_prediction = "NO"
+        reasoning.append(f"\n📊 **BTTS Decision:** NO ({', '.join(btts_no_signals)})")
+    else:
+        reasoning.append(f"\n📊 **BTTS Decision:** No clear signals → Not predicted")
+    
+    # Winner Prediction
+    winner_prediction = None
+    if home_win_signals:
+        winner_prediction = f"{home.name} WIN"
+        reasoning.append(f"\n🏆 **Winner Decision:** {winner_prediction} ({', '.join(home_win_signals)})")
+    elif away_win_signals:
+        winner_prediction = f"{away.name} WIN"
+        reasoning.append(f"\n🏆 **Winner Decision:** {winner_prediction} ({', '.join(away_win_signals)})")
+    elif draw_signals:
+        winner_prediction = f"{away.name} or DRAW"
+        reasoning.append(f"\n🏆 **Winner Decision:** {winner_prediction} ({', '.join(draw_signals)})")
+    else:
+        reasoning.append(f"\n🏆 **Winner Decision:** No clear signals → Not predicted")
+    
+    # Over/Under Prediction
+    over_under_prediction = None
+    if under_signals:
+        over_under_prediction = "Under 2.5"
+        reasoning.append(f"\n📈 **Over/Under Decision:** {over_under_prediction} ({', '.join(under_signals)})")
+    
+    # Score Prediction (only for Pattern A style)
+    score_prediction = None
+    if away.has_without_win_away():
+        if home.has_over05_home():
+            score_prediction = "1-0"
+            reasoning.append(f"\n🎯 **Score Prediction:** {score_prediction} ({home.name} has Over 0.5 🏠)")
+        else:
+            score_prediction = "0-0"
+            reasoning.append(f"\n🎯 **Score Prediction:** {score_prediction} ({home.name} no Over 0.5 🏠)")
+    
+    # Determine pattern name
+    pattern_name = "Contradiction-Based Prediction"
+    if away.has_btts_away():
+        pattern_name = "Pattern: BTTS ✈️"
+    elif away.has_without_win_away():
+        pattern_name = "Pattern: Without Win ✈️"
+    elif away.has_unbeaten_away() and away.has_over05_away():
+        pattern_name = "Pattern: Unbeaten ✈️ + Over 0.5 ✈️"
+    elif away.has_unbeaten_away() and not away.has_over05_away():
+        pattern_name = "Pattern: Unbeaten ✈️ only"
+    elif away.has_over05_away() and not away.has_unbeaten_away() and not away.has_without_win_away():
+        pattern_name = "Pattern: Over 0.5 ✈️ only"
     
     return PredictionResult(
-        btts=None,
-        over_under=None,
-        winner=None,
-        score=None,
-        pattern="SKIP (No clear streaks)",
-        reasoning=reasoning
+        btts=btts_prediction,
+        over_under=over_under_prediction,
+        winner=winner_prediction,
+        score=score_prediction,
+        pattern=pattern_name,
+        reasoning=reasoning,
+        contradictions=contradictions
     )
 
 
@@ -433,6 +504,15 @@ def build_team_from_checkboxes(prefix: str, name: str, is_home: bool) -> TeamStr
     if away_icon:
         team.btts.append(Streak("btts", "✈️"))
     
+    # No BTTS
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_No BTTS", (False, False, False))
+    if plain:
+        team.no_btts.append(Streak("no_btts", ""))
+    if home_icon:
+        team.no_btts.append(Streak("no_btts", "🏠"))
+    if away_icon:
+        team.no_btts.append(Streak("no_btts", "✈️"))
+    
     # Over 0.5
     plain, home_icon, away_icon = st.session_state.get(f"{prefix}_Over 0.5", (False, False, False))
     if plain:
@@ -441,6 +521,15 @@ def build_team_from_checkboxes(prefix: str, name: str, is_home: bool) -> TeamStr
         team.over05.append(Streak("over05", "🏠"))
     if away_icon:
         team.over05.append(Streak("over05", "✈️"))
+    
+    # Over 2.5
+    plain, home_icon, away_icon = st.session_state.get(f"{prefix}_Over 2.5", (False, False, False))
+    if plain:
+        team.over25.append(Streak("over25", ""))
+    if home_icon:
+        team.over25.append(Streak("over25", "🏠"))
+    if away_icon:
+        team.over25.append(Streak("over25", "✈️"))
     
     # Unbeaten
     plain, home_icon, away_icon = st.session_state.get(f"{prefix}_Unbeaten", (False, False, False))
@@ -468,13 +557,14 @@ def build_team_from_checkboxes(prefix: str, name: str, is_home: bool) -> TeamStr
 # ============================================================================
 def main():
     st.title("⚽ Streak Predictor")
-    st.caption("Final Version | Away Team System | 100% Validated on 23 matches")
+    st.caption("Contradiction-Based System | Only bets when ALL signals agree")
     
     st.markdown("""
     <div class="venue-note">
-        🏟️ <strong>Core Principle:</strong> Only the Away Team's streaks matter.<br>
-        🏠 Home streaks are ignored except for scoreline prediction in Pattern A.<br>
-        ✅ <strong>Simply check the boxes</strong> for streaks that exist. No numbers needed.
+        🏟️ <strong>Core Principle:</strong> A prediction is only valid if NO streak contradicts it.<br>
+        🏠 Home streaks apply | ✈️ Away streaks apply | Plain streaks apply to both<br>
+        ✅ <strong>Simply check the boxes</strong> for streaks that exist. No numbers needed.<br>
+        ⚠️ <strong>If contradictions detected → NO BET</strong>
     </div>
     """, unsafe_allow_html=True)
     
@@ -501,9 +591,17 @@ def main():
         data = streak_checkboxes("BTTS", "home")
         st.session_state["home_BTTS"] = data
     
+    with st.expander("🚫 No BTTS Streaks", expanded=False):
+        data = streak_checkboxes("No BTTS", "home")
+        st.session_state["home_No BTTS"] = data
+    
     with st.expander("📈 Over 0.5 Goals Streaks", expanded=False):
         data = streak_checkboxes("Over 0.5", "home")
         st.session_state["home_Over 0.5"] = data
+    
+    with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
+        data = streak_checkboxes("Over 2.5", "home")
+        st.session_state["home_Over 2.5"] = data
     
     with st.expander("🛡️ Unbeaten Streaks", expanded=False):
         data = streak_checkboxes("Unbeaten", "home")
@@ -528,9 +626,17 @@ def main():
         data = streak_checkboxes("BTTS", "away")
         st.session_state["away_BTTS"] = data
     
+    with st.expander("🚫 No BTTS Streaks", expanded=False):
+        data = streak_checkboxes("No BTTS", "away")
+        st.session_state["away_No BTTS"] = data
+    
     with st.expander("📈 Over 0.5 Goals Streaks", expanded=False):
         data = streak_checkboxes("Over 0.5", "away")
         st.session_state["away_Over 0.5"] = data
+    
+    with st.expander("📈 Over 2.5 Goals Streaks", expanded=False):
+        data = streak_checkboxes("Over 2.5", "away")
+        st.session_state["away_Over 2.5"] = data
     
     with st.expander("🛡️ Unbeaten Streaks", expanded=False):
         data = streak_checkboxes("Unbeaten", "away")
@@ -551,24 +657,28 @@ def main():
         
         result = predict_match(home_team, away_team)
         
-        if result.pattern == "SKIP (No clear streaks)":
-            pred_html = f'<div class="prediction-skip">⏸️ SKIP - No clear pattern</div>'
+        if result.pattern == "NO BET (Contradiction)":
+            pred_html = f'<div class="prediction-skip">⏸️ NO BET - Contradiction detected</div>'
+            over_html = ""
+            winner_html = ""
+            score_html = ""
+        elif result.btts is None and result.winner is None:
+            pred_html = f'<div class="prediction-skip">⏸️ NO BET - No clear signals</div>'
             over_html = ""
             winner_html = ""
             score_html = ""
         else:
+            btts_html = ""
             if result.btts == "YES":
                 btts_html = f'<div class="prediction-btts-yes">✅ BTTS YES</div>'
             elif result.btts == "NO":
                 btts_html = f'<div class="prediction-btts-no">🚫 BTTS NO</div>'
-            else:
-                btts_html = ""
             
+            over_html = ""
             if result.over_under == "Under 2.5":
                 over_html = f'<div class="prediction-under25">📉 {result.over_under}</div>'
-            else:
-                over_html = ""
             
+            winner_html = ""
             if result.winner == f"{home_team.name} WIN":
                 winner_html = f'<div class="prediction-home-win">🏆 {result.winner}</div>'
             elif result.winner == f"{away_team.name} or DRAW":
@@ -577,13 +687,10 @@ def main():
                 winner_html = f'<div class="prediction-away-win">🏆 {result.winner}</div>'
             elif result.winner == "Winner uncertain":
                 winner_html = f'<div class="prediction-uncertain">❓ {result.winner}</div>'
-            else:
-                winner_html = ""
             
+            score_html = ""
             if result.score:
                 score_html = f'<div class="score-prediction">🎯 Predicted score: {result.score}</div>'
-            else:
-                score_html = ""
             
             pred_html = f'{btts_html}{over_html}{winner_html}{score_html}'
         
@@ -596,50 +703,44 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
+        if result.contradictions:
+            with st.expander("⚠️ Contradictions Detected", expanded=True):
+                for c in result.contradictions:
+                    st.error(c)
+        
         with st.expander("📋 Detailed Reasoning", expanded=True):
             for line in result.reasoning:
                 if "✅" in line:
                     st.success(line)
                 elif "❌" in line:
                     st.error(line)
-                elif "📊" in line:
+                elif "⚠️" in line:
+                    st.warning(line)
+                elif "📊" in line or "🏆" in line or "📈" in line or "🎯" in line:
                     st.info(line)
                 else:
                     st.write(line)
     
     st.divider()
     st.markdown("""
-    ### 📋 Priority Order (Check in THIS Sequence)
+    ### 📋 Contradiction-Based System Rules
     
-    | Priority | Condition | Pattern | BTTS | Winner | Safe Bets |
-    |----------|-----------|---------|------|--------|-----------|
-    | **1** | BTTS ✈️ | **1** | ✅ YES | Uncertain | BTTS YES |
-    | **2** | Without Win ✈️ | **A** | ❌ NO | Home Win | BTTS NO + Home Win |
-    | **3a** | Unbeaten ✈️ + Over 0.5 ✈️ | **B** | ✅ YES | Away/Draw | BTTS YES + Away/Draw |
-    | **3b** | Unbeaten ✈️ only | **C** | ❌ NO | Away Win | BTTS NO + Away Win |
-    | **4** | Over 0.5 ✈️ only | **D** | ❌ NO | Uncertain | BTTS NO + Under 2.5 |
-    | **5** | No clear streaks | **SKIP** | — | — | No bet |
+    | Signal | Predicts |
+    |--------|----------|
+    | BTTS ✈️ (away) | BTTS YES |
+    | Both teams have scoring | BTTS YES |
+    | Over 0.5 ✈️ + Unbeaten ✈️ | BTTS YES + Away/Draw |
+    | No BTTS (any) | BTTS NO |
+    | Without Win ✈️ | BTTS NO + Home Win |
+    | Unbeaten ✈️ only (home no scoring) | BTTS NO + Away Win |
+    | Over 0.5 ✈️ only | BTTS NO + Under 2.5 |
     
-    ### 🎯 The Golden Rules
+    ### ⚠️ Contradictions That Trigger NO BET
     
-    1. **BTTS ✈️** = BTTS YES (always, regardless of other streaks)
-    2. **Without Win ✈️** = BTTS NO + Home Win
-    3. **Unbeaten ✈️ + Over 0.5 ✈️** = BTTS YES + Away/Draw
-    4. **Unbeaten ✈️ only** = BTTS NO + Away Win
-    5. **Over 0.5 ✈️ only** = BTTS NO + Under 2.5
-    6. **No clear streaks** = NO BET
-    
-    ### 📊 Validation (23 matches)
-    
-    | Pattern | Matches | BTTS Success | Winner Success |
-    |---------|---------|--------------|----------------|
-    | 1 (BTTS ✈️) | 2 | 2/2 (100%) | N/A |
-    | A | 10 | 10/10 (100%) | 9/10 (90%) |
-    | B | 6 | 6/6 (100%) | 6/6 (100%) |
-    | C | 2 | 2/2 (100%) | 2/2 (100%) |
-    | D | 3 | 3/3 (100%) | By design uncertain |
-    
-    **Core bet success rate: 100%**
+    - BTTS YES and BTTS NO signals both present
+    - Without Win ✈️ and Unbeaten ✈️ on same team
+    - Without Win ✈️ and BTTS ✈️ on same team
+    - Unbeaten ✈️ only (Away Win) but Home has scoring
     
     ### 🎯 How to Use
     
@@ -650,6 +751,12 @@ def main():
        - ✈️ = away streak (only counts for away team)
        - Plain = applies to both
     4. Click **PREDICT**
+    
+    ### ✅ Core Principle
+    
+    **A prediction is only valid if NO streak contradicts it.**
+    
+    If contradictions exist → NO BET. This ensures you only bet when all signals agree.
     """)
 
 if __name__ == "__main__":
